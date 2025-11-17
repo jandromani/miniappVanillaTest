@@ -1,13 +1,23 @@
 import { RequestHandler } from "express";
 import crypto from "crypto";
+import { createPaymentReference } from "./payment-store";
 
-export const initiatePaymentHandler: RequestHandler = (_req, res) => {
+export const initiatePaymentHandler: RequestHandler = (req, res) => {
   const uuid = crypto.randomUUID().replace(/-/g, "");
+  const { userId, tournamentId, token = "WLD", amount } = req.body as {
+    userId?: string;
+    tournamentId?: string;
+    token?: "WLD" | "USDC";
+    amount?: number;
+  };
 
-  // TODO: Store the ID field in your database so you can verify the payment later
-  res.cookie("payment-nonce", uuid, { httpOnly: true });
+  const record = createPaymentReference({
+    reference: uuid,
+    userId,
+    tournamentId,
+    token: token ?? "WLD",
+    amount: amount ?? 0,
+  });
 
-  console.log(uuid);
-
-  res.json({ id: uuid });
+  res.json({ id: uuid, record });
 };
