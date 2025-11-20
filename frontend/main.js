@@ -517,9 +517,11 @@ async function handleVerify() {
     sessionStatus.textContent = "Sesión validada";
     showToast("Sesión autenticada y firmada.", "success");
   } catch (error) {
-    lastVerification.textContent = "Modo mock (dev)";
-    sessionStatus.textContent = "Sesión simulada";
-    showToast("Sesión simulada en modo dev.", "info");
+    console.error("World ID verify failed", error);
+    sessionToken = null;
+    sessionStatus.textContent = "Verificación fallida";
+    lastVerification.textContent = "Sin verificación";
+    showToast("No se pudo verificar World ID. Intenta de nuevo.", "error");
   }
 }
 

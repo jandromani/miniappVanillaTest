@@ -1,9 +1,10 @@
 import { RequestHandler } from "express";
 import crypto from "crypto";
 import { createPaymentReference } from "./payment-store";
-import { getTournament } from "./tournaments";
+import { getTournament, hasTournamentEntryForWorldId } from "./tournaments";
 import { AuthedRequest } from "./auth";
 import { buildPayloadBase, signPayloadBase } from "./api-signature";
+import { hasJoinedTournament } from "./worldid-store";
 
 export const initiatePaymentHandler: RequestHandler = (req, res) => {
   const uuid = crypto.randomUUID().replace(/-/g, "");
@@ -23,6 +24,16 @@ export const initiatePaymentHandler: RequestHandler = (req, res) => {
   const tournament = tournamentId ? getTournament(tournamentId) : undefined;
   if (!tournament) {
     res.status(404).json({ ok: false, reason: "unknown_tournament" });
+    return;
+  }
+
+  if (!user.worldId) {
+    res.status(400).json({ ok: false, reason: "world_id_required" });
+    return;
+  }
+
+  if (hasTournamentEntryForWorldId(tournamentId, user.worldId) || hasJoinedTournament(user.worldId, tournamentId)) {
+    res.status(409).json({ ok: false, reason: "already_joined" });
     return;
   }
 

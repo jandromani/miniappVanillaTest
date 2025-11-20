@@ -3,8 +3,9 @@ import { RequestHandler } from "express";
 
 type AuthPayload = {
   wallet: string;
-  worldId?: string;
+  worldId: string;
   issuedAt: number;
+  exp: number;
 };
 
 const AUTH_SECRET = process.env.AUTH_HMAC_SECRET ?? "dev-auth-secret";
@@ -25,14 +26,18 @@ const verifyTokenInternal = (token?: string): AuthPayload | undefined => {
     const serialized = Buffer.from(encoded, "base64url").toString("utf8");
     const expected = crypto.createHmac("sha256", AUTH_SECRET).update(serialized).digest("hex");
     if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return undefined;
-    return JSON.parse(serialized) as AuthPayload;
+    const parsed = JSON.parse(serialized) as AuthPayload;
+    if (parsed.exp && parsed.exp < Date.now()) return undefined;
+    if (process.env.NODE_ENV !== "test" && process.env.NODE_ENV !== "development" && !parsed.worldId) return undefined;
+    return parsed;
   } catch {
     return undefined;
   }
 };
 
-export const issueSessionToken = (wallet: string, worldId?: string) => {
-  const payload: AuthPayload = { wallet, worldId, issuedAt: Date.now() };
+export const issueSessionToken = (wallet: string, worldId: string) => {
+  const issuedAt = Date.now();
+  const payload: AuthPayload = { wallet, worldId, issuedAt, exp: issuedAt + 30 * 60 * 1000 };
   return signPayload(payload);
 };
 

@@ -16,6 +16,7 @@ export interface LeaderboardEntry {
 export interface TournamentEntry {
   reference: string;
   userId?: string;
+  worldId?: string;
   wallet?: string;
   amount: number;
   token: "WLD" | "USDC";
@@ -165,10 +166,22 @@ export const getTournament = (id: string) => listTournaments().find((t) => t.id 
 export const addTournamentEntry = (id: string, entry: Omit<TournamentEntry, "createdAt">) => {
   const tournament = tournaments.find((t) => t.id === id);
   if (!tournament) return undefined;
+  const duplicate = entry.worldId
+    ? tournament.entries.some((existing) => existing.worldId === entry.worldId)
+    : false;
+  if (duplicate) {
+    return getTournament(id);
+  }
   tournament.entries.push({ ...entry, createdAt: Date.now() });
   tournament.players = Math.max(tournament.players, tournament.entries.length);
   persist(tournaments);
   return getTournament(id);
+};
+
+export const hasTournamentEntryForWorldId = (id: string, worldId: string) => {
+  const tournament = tournaments.find((t) => t.id === id);
+  if (!tournament) return false;
+  return tournament.entries.some((entry) => entry.worldId === worldId);
 };
 
 export const recordTournamentAnswer = (
@@ -250,10 +263,10 @@ export const processDuePayouts = async () => {
 
 export const getUserHistory = (wallet: string) => {
   const participated = tournaments.filter((t) =>
-    t.entries.some((entry) => entry.userId === wallet)
+    t.entries.some((entry) => entry.userId === wallet || entry.wallet === wallet)
   );
   const wins = participated.filter((t) =>
-    t.payouts.some((p) => p.userId === wallet)
+    t.payouts.some((p) => p.userId === wallet || t.entries.some((e) => e.wallet === wallet))
   );
   const answered = tournaments.filter((t) => t.responses.some((r) => r.wallet === wallet));
   const totalEarned = wins.reduce((sum, t) => sum + (t.payouts.find((p) => p.userId === wallet)?.amount ?? 0), 0);

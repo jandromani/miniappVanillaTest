@@ -10,6 +10,8 @@ type PersistedState = {
   prizePoolSnapshots?: any[];
   merkleRecords?: any[];
   worldcoinTxLogs?: any[];
+  worldIdRecords?: any[];
+  worldIdProofs?: any[];
 };
 
 const ensureDir = () => {

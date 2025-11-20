@@ -25,7 +25,14 @@ export const submitAnswerHandler: RequestHandler = (req, res) => {
     optionId?: string;
   };
 
-  const wallet = (req as AuthedRequest).user?.wallet ?? "anon-player";
+  const user = (req as AuthedRequest).user;
+
+  if (!user?.worldId) {
+    res.status(401).json({ ok: false, reason: "unauthorized" });
+    return;
+  }
+
+  const wallet = user.wallet ?? "anon-player";
 
   if (!nonce || typeof answerIndex !== "number" || typeof answeredAt !== "number" || !optionId) {
     res.status(400).json({ ok: false, reason: "invalid_payload" });

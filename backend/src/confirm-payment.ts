@@ -1,11 +1,12 @@
 import { MiniAppPaymentSuccessPayload } from "@worldcoin/minikit-js";
 import { RequestHandler } from "express";
 import { getPayment, updatePaymentStatus } from "./payment-store";
-import { addTournamentEntry, getTournament } from "./tournaments";
+import { addTournamentEntry, getTournament, hasTournamentEntryForWorldId } from "./tournaments";
 import { verifyWorldcoinTransaction } from "./worldcoin-client";
 import { AuthedRequest } from "./auth";
 import { verifyPayloadSignature, buildPayloadBase } from "./api-signature";
 import { logWorldcoinVerification } from "./worldcoin-tx-store";
+import { hasJoinedTournament, markTournamentParticipation } from "./worldid-store";
 
 interface IRequestPayload {
   payload: MiniAppPaymentSuccessPayload;
@@ -19,6 +20,11 @@ export const confirmPaymentHandler: RequestHandler = async (req, res) => {
 
   if (!user) {
     res.status(401).json({ success: false, reason: "unauthorized" });
+    return;
+  }
+
+  if (!user.worldId) {
+    res.status(400).json({ success: false, reason: "world_id_required" });
     return;
   }
 
@@ -63,6 +69,11 @@ export const confirmPaymentHandler: RequestHandler = async (req, res) => {
     return;
   }
 
+  if (hasTournamentEntryForWorldId(existing.tournamentId!, user.worldId) || hasJoinedTournament(user.worldId, existing.tournamentId!)) {
+    res.status(409).json({ success: false, reason: "already_joined" });
+    return;
+  }
+
   const verification = await verifyWorldcoinTransaction(reference, payload.transaction_id, {
     amount: tournament.entryFee,
     symbol: existing.token,
@@ -87,11 +98,14 @@ export const confirmPaymentHandler: RequestHandler = async (req, res) => {
     if (existing.tournamentId) {
       addTournamentEntry(existing.tournamentId, {
         reference,
-        userId: user.wallet,
+        userId: user.worldId,
+        worldId: user.worldId,
         token: existing.token,
         amount: existing.amount,
         transactionId: payload.transaction_id,
+        wallet: user.wallet,
       });
+      markTournamentParticipation(user.worldId, existing.tournamentId);
     }
     res.json({ success: true, reference, record: updated, transaction: verification.transaction, mode: verification.reason });
     return;
