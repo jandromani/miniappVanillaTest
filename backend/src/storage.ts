@@ -6,6 +6,7 @@ const DATA_PATH = path.join(__dirname, "..", "data", "state.json");
 type PersistedState = {
   payments?: any[];
   tournaments?: any[];
+  suspiciousAnswers?: any[];
 };
 
 const ensureDir = () => {
@@ -29,7 +30,9 @@ export const loadState = (): PersistedState => {
 export const saveState = (state: PersistedState) => {
   try {
     ensureDir();
-    fs.writeFileSync(DATA_PATH, JSON.stringify(state, null, 2));
+    const tmpPath = `${DATA_PATH}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2));
+    fs.renameSync(tmpPath, DATA_PATH);
   } catch (error) {
     console.warn("Failed to save state", error);
   }

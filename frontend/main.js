@@ -23,6 +23,7 @@ const questionProgress = document.getElementById("question-progress");
 const progressBar = document.getElementById("progress-bar");
 const gamePot = document.getElementById("game-pot");
 const answerStatus = document.getElementById("answer-status");
+const sseStatus = document.getElementById("sse-status");
 
 let tournaments = [];
 let leaderboard = [];
@@ -47,8 +48,19 @@ let countdownInterval = null;
 let activeSession = null;
 let hasLockedAnswer = false;
 let serverOffsetMs = 0;
+let questionSource = null;
+let reconnectTimer = null;
 
 const serverNow = () => Date.now() + serverOffsetMs;
+
+const setSSEIndicator = (state, message) => {
+  if (!sseStatus) return;
+  sseStatus.textContent = message;
+  sseStatus.classList.remove("text-amber-300", "text-emerald-300", "text-rose-300");
+  const color =
+    state === "connected" ? "text-emerald-300" : state === "reconnecting" ? "text-amber-300" : "text-rose-300";
+  sseStatus.classList.add(color);
+};
 
 const statusMap = {
   open: {
@@ -233,21 +245,22 @@ function animateQuestion(session) {
 
   requestAnimationFrame(typewriter);
 
-  const createOptionButton = (option, index) => {
+  const createOptionButton = (label, index) => {
     const button = document.createElement("button");
     button.className =
-      "option-button opacity-0 translate-y-2 transition-all duration-300 bg-slate-800/80 border border-slate-700 hover:border-sky-400 text-left px-4 py-3 rounded-xl font-semibold";
-    button.textContent = option;
+      "option-button opacity-0 translate-y-2 transition-all duration-300 bg-slate-800/80 border border-slate-700 hover:border-sky-400 text-left px-4 py-3 rounded-xl font-semibold select-none";
+    button.textContent = label;
     button.disabled = true;
-    button.addEventListener("click", () => handleAnswer(option, index, question.correctIndex));
+    button.addEventListener("click", () => handleAnswer(label, index, question.correctIndex));
     optionsContainer.appendChild(button);
     return button;
   };
 
-  const revealStart = start + 1000;
+  const revealStart = start;
+  const revealStep = Math.max(250, Math.floor(showPhaseDuration / question.options.length));
 
   question.options.forEach((option, index) => {
-    const revealAt = revealStart + index * 1000;
+    const revealAt = revealStart + index * revealStep;
     const delay = Math.max(0, revealAt - serverNow());
 
     revealTimeouts.push(
@@ -476,9 +489,22 @@ const bootstrapDemoSession = () => {
 };
 
 const streamQuestions = () => {
-  const source = new EventSource("http://localhost:3000/api/game/demo/question");
+  if (questionSource) {
+    questionSource.close();
+  }
 
-  source.onmessage = (event) => {
+  setSSEIndicator("reconnecting", "Conectando SSE...");
+  questionSource = new EventSource("http://localhost:3000/api/game/demo/question");
+
+  questionSource.onopen = () => {
+    setSSEIndicator("connected", "SSE en vivo");
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  };
+
+  questionSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       if (data.serverTime) {
@@ -490,7 +516,7 @@ const streamQuestions = () => {
     }
   };
 
-  source.addEventListener("tick", (event) => {
+  questionSource.addEventListener("tick", (event) => {
     try {
       const data = JSON.parse(event.data);
       serverOffsetMs = data.serverTime - Date.now();
@@ -504,10 +530,13 @@ const streamQuestions = () => {
     }
   });
 
-  source.onerror = () => {
-    console.warn("Falling back to demo session");
+  questionSource.onerror = () => {
+    setSSEIndicator("reconnecting", "SSE desconectado, reintentando...");
     answerStatus.textContent = "SSE desconectado, usando sesión demo local";
     bootstrapDemoSession();
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(streamQuestions, 5000);
+    }
   };
 };
 

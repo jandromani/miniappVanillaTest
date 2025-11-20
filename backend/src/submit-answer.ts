@@ -19,6 +19,11 @@ export const submitAnswerHandler: RequestHandler = (req, res) => {
     questionNumber?: number;
   };
 
+  if (!nonce || typeof answerIndex !== "number" || typeof answeredAt !== "number") {
+    res.status(400).json({ ok: false, reason: "invalid_payload" });
+    return;
+  }
+
   const validation = validateAnswerWindow(nonce, answeredAt);
 
   if (!validation.accepted) {

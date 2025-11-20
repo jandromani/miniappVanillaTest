@@ -12,6 +12,7 @@ import {
   processDuePayouts,
   getUserHistory,
 } from "./src/tournaments";
+import { getSuspiciousAnswers } from "./src/game-session";
 import cors from "cors";
 
 const app = express();
@@ -64,6 +65,10 @@ app.get("/api/tournaments/:id/leaderboard", (req, res) => {
 app.get("/api/user/:wallet/history", (req, res) => {
   const history = getUserHistory(req.params.wallet);
   res.json({ ok: true, history });
+});
+
+app.get("/api/suspicious", (_req, res) => {
+  res.json({ ok: true, suspicious: getSuspiciousAnswers() });
 });
 
 const port = 3000; // use env var

@@ -29,7 +29,7 @@ export const questionStreamHandler: RequestHandler = (req, res) => {
   };
 
   sendQuestion();
-  const tickInterval = setInterval(sendTick, 3000);
+  const tickInterval = setInterval(sendTick, 1000);
 
   req.on("close", () => {
     clearInterval(tickInterval);

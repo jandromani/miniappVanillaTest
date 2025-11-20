@@ -47,6 +47,8 @@ export const getPayment = (reference: string) => paymentStore.get(reference);
 export const updatePaymentStatus = (reference: string, status: PaymentStatus, transactionId?: string) => {
   const existing = paymentStore.get(reference);
   if (!existing) return undefined;
+  if (existing.status === "confirmed" && status === "confirmed") return existing;
+  if (existing.status === "confirmed" && status === "pending") return existing;
   const updated: PaymentRecord = {
     ...existing,
     status,

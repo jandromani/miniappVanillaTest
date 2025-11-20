@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { appendSuspicious, listSuspicious } from "./audit-store";
 
 interface QuestionPayload {
   gameId: string;
@@ -99,21 +100,24 @@ export interface AnswerRecord {
 export const validateAnswerWindow = (nonce: string, answeredAt: number): AnswerValidation => {
   const session = sessionStore.get(nonce);
   if (!session) return { accepted: false, reason: "session_not_found" };
-  const now = Date.now();
 
-  if (now < session.answerWindowOpensAt) {
+  const now = Date.now();
+  const open = session.answerWindowOpensAt;
+  const close = session.deadline;
+
+  if (now < open) {
     return { accepted: false, reason: "answered_too_early_server" };
   }
 
-  if (now > session.deadline) {
+  if (now > close) {
     return { accepted: false, reason: "answered_after_deadline_server" };
   }
 
-  if (answeredAt < session.answerWindowOpensAt) {
+  if (answeredAt < open) {
     return { accepted: false, reason: "answered_too_early" };
   }
 
-  if (answeredAt > session.deadline) {
+  if (answeredAt > close) {
     return { accepted: false, reason: "answered_after_deadline" };
   }
 
@@ -122,9 +126,20 @@ export const validateAnswerWindow = (nonce: string, answeredAt: number): AnswerV
 
 export const recordAnswer = (record: AnswerRecord) => {
   answerAuditLog.push(record);
+  if (record.suspicious) {
+    appendSuspicious({
+      nonce: record.nonce,
+      gameId: record.gameId,
+      questionId: record.questionId,
+      answerIndex: record.answerIndex,
+      answerTime: record.answerTime,
+      answeredAt: record.answeredAt,
+      reason: record.suspicious,
+    });
+  }
 };
 
 export const getSuspiciousAnswers = () =>
-  answerAuditLog.filter((record) => record.suspicious !== undefined);
+  listSuspicious().length ? listSuspicious() : answerAuditLog.filter((record) => record.suspicious !== undefined);
 
 export type QuestionSession = QuestionPayload;

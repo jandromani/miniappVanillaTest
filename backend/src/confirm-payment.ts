@@ -1,8 +1,8 @@
-import fetch from "node-fetch";
 import { MiniAppPaymentSuccessPayload } from "@worldcoin/minikit-js";
 import { RequestHandler } from "express";
 import { getPayment, updatePaymentStatus } from "./payment-store";
 import { addTournamentEntry } from "./tournaments";
+import { verifyWorldcoinTransaction } from "./worldcoin";
 
 interface IRequestPayload {
   payload: MiniAppPaymentSuccessPayload;
@@ -23,35 +23,15 @@ export const confirmPaymentHandler: RequestHandler = async (req, res) => {
     return;
   }
 
-  // When running locally without app credentials, treat confirmation as a mocked success
-  if (!process.env.APP_ID || !process.env.DEV_PORTAL_API_KEY) {
-    const updated = updatePaymentStatus(reference, "confirmed", payload.transaction_id);
-    if (existing.tournamentId) {
-      addTournamentEntry(existing.tournamentId, {
-        reference,
-        userId: existing.userId,
-        token: existing.token,
-        amount: existing.amount,
-        transactionId: payload.transaction_id,
-      });
-    }
-    res.json({ success: true, reference, record: updated, mode: "mock" });
+  const existingStatus = existing.status;
+  if (existingStatus === "confirmed") {
+    res.json({ success: true, reference, record: existing, mode: "idempotent" });
     return;
   }
 
-  const response = await fetch(
-    `https://developer.worldcoin.org/api/v2/minikit/transaction/${payload.transaction_id}?app_id=${process.env.APP_ID}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${process.env.DEV_PORTAL_API_KEY}`,
-      },
-    }
-  );
+  const verification = await verifyWorldcoinTransaction(reference, payload.transaction_id);
 
-  const transaction = (await response.json()) as any;
-
-  if (transaction.reference == reference && transaction.status !== "failed") {
+  if (verification.ok) {
     const updated = updatePaymentStatus(reference, "confirmed", payload.transaction_id);
     if (existing.tournamentId) {
       addTournamentEntry(existing.tournamentId, {
@@ -62,10 +42,10 @@ export const confirmPaymentHandler: RequestHandler = async (req, res) => {
         transactionId: payload.transaction_id,
       });
     }
-    res.json({ success: true, reference, record: updated, transaction });
+    res.json({ success: true, reference, record: updated, transaction: verification.transaction, mode: verification.reason });
     return;
   }
 
   updatePaymentStatus(reference, "failed", payload.transaction_id);
-  res.status(400).json({ success: false, reference, transaction });
+  res.status(400).json({ success: false, reference, reason: verification.reason, transaction: verification.transaction });
 };
