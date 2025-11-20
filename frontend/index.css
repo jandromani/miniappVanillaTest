@@ -45,6 +45,15 @@ body {
   opacity: 1;
 }
 
+.toast {
+  @apply px-3 py-2 rounded-xl shadow-lg shadow-slate-900/50 text-sm;
+  animation: fadeIn 150ms ease, fadeOut 250ms ease 3.2s forwards;
+}
+
+#toast-root {
+  @apply fixed top-4 right-4 flex flex-col gap-2 z-50 pointer-events-none;
+}
+
 .glow-card {
   background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.85));
   box-shadow: 0 10px 40px rgba(59, 130, 246, 0.15);

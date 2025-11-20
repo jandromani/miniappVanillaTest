@@ -5,9 +5,11 @@ export interface SuspiciousRecord {
   gameId: string;
   questionId: string;
   answerIndex: number;
+  optionId?: string;
   answerTime: number;
   answeredAt: number;
   reason: string;
+  wallet?: string;
 }
 
 const bootstrap = () => {

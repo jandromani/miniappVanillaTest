@@ -1,5 +1,7 @@
 import crypto from "crypto";
 import { loadState, updateState } from "./storage";
+import { syncPrizePoolWithOnChain } from "./worldchain-prizepool";
+import { buildMerkleRootForTournament, preparePayoutPayloads, publishPayoutsOnChain } from "./worldchain-merkle";
 
 export type TournamentStatus = "open" | "active" | "finished";
 
@@ -17,6 +19,16 @@ export interface TournamentEntry {
   token: "WLD" | "USDC";
   transactionId?: string;
   createdAt: number;
+}
+
+export interface AnswerLog {
+  wallet: string;
+  questionNumber: number;
+  correct: boolean;
+  answerTime: number;
+  answeredAt: number;
+  gameId: string;
+  nonce: string;
 }
 
 export interface PayoutRecord {
@@ -40,6 +52,7 @@ export interface Tournament {
   payouts: PayoutRecord[];
   payoutTxHash?: string;
   merkleRoot?: string;
+  responses: AnswerLog[];
 }
 
 const defaultTournaments: Tournament[] = [
@@ -53,6 +66,7 @@ const defaultTournaments: Tournament[] = [
     endsAt: Date.now() + 1000 * 60 * 30,
     players: 128,
     entries: [],
+    responses: [],
     leaderboard: [
       { userId: "user-1", wallet: "0xamsoryf...9495", correct: 14, timeMs: 8200 },
       { userId: "user-2", wallet: "0xkatana...7721", correct: 13, timeMs: 9100 },
@@ -72,6 +86,7 @@ const defaultTournaments: Tournament[] = [
     endsAt: Date.now() + 1000 * 60 * 15,
     players: 96,
     entries: [],
+    responses: [],
     leaderboard: [],
     payouts: [],
   },
@@ -85,6 +100,7 @@ const defaultTournaments: Tournament[] = [
     endsAt: Date.now() + 1000 * 60 * 10,
     players: 180,
     entries: [],
+    responses: [],
     leaderboard: [],
     payouts: [],
   },
@@ -105,6 +121,24 @@ const persist = (items: Tournament[]) => {
 const tournaments: Tournament[] = bootstrapTournaments();
 
 const payoutSplits = [0.5, 0.3, 0.2];
+
+const buildLeaderboardFromResponses = (responses: AnswerLog[]): LeaderboardEntry[] => {
+  const aggregates = new Map<string, { correct: number; timeMs: number }>();
+  responses.forEach((resp) => {
+    const current = aggregates.get(resp.wallet) ?? { correct: 0, timeMs: 0 };
+    aggregates.set(resp.wallet, {
+      correct: current.correct + (resp.correct ? 1 : 0),
+      timeMs: current.timeMs + resp.answerTime,
+    });
+  });
+
+  return Array.from(aggregates.entries()).map(([wallet, stats]) => ({
+    userId: wallet,
+    wallet,
+    correct: stats.correct,
+    timeMs: stats.timeMs,
+  }));
+};
 
 const computeFinancials = (tournament: Tournament) => {
   const totalPaid = tournament.entries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -134,11 +168,28 @@ export const addTournamentEntry = (id: string, entry: Omit<TournamentEntry, "cre
   return getTournament(id);
 };
 
+export const recordTournamentAnswer = (
+  id: string,
+  log: Omit<AnswerLog, "answeredAt"> & { answeredAt?: number }
+) => {
+  const tournament = tournaments.find((t) => t.id === id);
+  if (!tournament) return undefined;
+  const answeredAt = log.answeredAt ?? Date.now();
+  tournament.responses.push({ ...log, answeredAt });
+  tournament.leaderboard = buildLeaderboardFromResponses(tournament.responses);
+  persist(tournaments);
+  return tournament;
+};
+
 export const getLeaderboard = (id: string) => {
   const tournament = tournaments.find((t) => t.id === id);
   if (!tournament) return undefined;
   const { prizePool } = computeFinancials(tournament);
-  const sorted = [...tournament.leaderboard].sort((a, b) => {
+  const baseLeaderboard =
+    tournament.responses.length > 0
+      ? buildLeaderboardFromResponses(tournament.responses)
+      : tournament.leaderboard;
+  const sorted = [...baseLeaderboard].sort((a, b) => {
     if (a.correct !== b.correct) return b.correct - a.correct;
     return a.timeMs - b.timeMs;
   });
@@ -152,25 +203,19 @@ export const getLeaderboard = (id: string) => {
 export const finalizeTournament = (id: string) => {
   const tournament = tournaments.find((t) => t.id === id);
   if (!tournament || tournament.status === "finished") return undefined;
-  const { prizePool, rakeAmount } = computeFinancials(tournament);
+  const { prizePool, rakeAmount, totalPaid } = computeFinancials(tournament);
   const leaderboard = getLeaderboard(id) ?? [];
-  const payouts: PayoutRecord[] = [];
+  const payoutsPayload = preparePayoutPayloads(leaderboard, prizePool, payoutSplits);
+  const payouts: PayoutRecord[] = payoutsPayload.map((payload) => ({
+    position: payload.position,
+    userId: payload.wallet,
+    amount: payload.amount,
+    transactionHash: `0x${crypto.randomBytes(16).toString("hex")}`,
+  }));
 
-  leaderboard.slice(0, payoutSplits.length).forEach((entry, idx) => {
-    const payoutAmount = Math.round(prizePool * payoutSplits[idx] * 100) / 100;
-    payouts.push({
-      position: entry.position,
-      userId: entry.userId,
-      amount: payoutAmount,
-      transactionHash: `0x${crypto.randomBytes(16).toString("hex")}`,
-    });
-  });
-
-  const merkleRoot = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(leaderboard))
-    .digest("hex");
-  const payoutTxHash = `0x${crypto.randomBytes(16).toString("hex")}`;
+  const merkleRoot = buildMerkleRootForTournament(leaderboard);
+  const payoutTxHash = publishPayoutsOnChain(id, merkleRoot, payoutsPayload).txHash;
+  syncPrizePoolWithOnChain(tournament, prizePool, rakeAmount, totalPaid);
 
   tournament.status = "finished";
   tournament.payouts = payouts;
@@ -204,10 +249,20 @@ export const getUserHistory = (wallet: string) => {
   const wins = participated.filter((t) =>
     t.payouts.some((p) => p.userId === wallet)
   );
+  const answered = tournaments.filter((t) => t.responses.some((r) => r.wallet === wallet));
+  const totalEarned = wins.reduce((sum, t) => sum + (t.payouts.find((p) => p.userId === wallet)?.amount ?? 0), 0);
+  const totalAnswered = answered.reduce((sum, t) => sum + t.responses.filter((r) => r.wallet === wallet).length, 0);
+  const totalCorrect = answered.reduce(
+    (sum, t) => sum + t.responses.filter((r) => r.wallet === wallet && r.correct).length,
+    0
+  );
 
   return {
     wallet,
     played: participated.map((t) => ({ id: t.id, name: t.name, status: t.status })),
     wins: wins.map((t) => ({ id: t.id, name: t.name, payout: t.payouts.find((p) => p.userId === wallet)?.amount })),
+    answered: totalAnswered,
+    correct: totalCorrect,
+    totalEarned,
   };
 };

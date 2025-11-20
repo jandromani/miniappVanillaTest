@@ -1,5 +1,6 @@
 import { RequestHandler } from "express";
 import { createQuestionSession } from "./game-session";
+import { signPayload } from "./time-signature";
 
 export const questionStreamHandler: RequestHandler = (req, res) => {
   const { id } = req.params;
@@ -11,21 +12,23 @@ export const questionStreamHandler: RequestHandler = (req, res) => {
   res.flushHeaders?.();
 
   const sendQuestion = () => {
-    res.write(
-      `data: ${JSON.stringify({ ...session, serverTime: Date.now() })}\n\n`
-    );
+    const payload = {
+      ...session,
+      question: { ...session.question, correctOptionId: undefined },
+      serverTime: Date.now(),
+    };
+    res.write(`data: ${JSON.stringify({ ...payload, signature: signPayload(payload) })}\n\n`);
   };
 
   const sendTick = () => {
-    res.write(
-      `event: tick\ndata: ${JSON.stringify({
-        nonce: session.nonce,
-        startTimestamp: session.startTimestamp,
-        answerWindowOpensAt: session.answerWindowOpensAt,
-        deadline: session.deadline,
-        serverTime: Date.now(),
-      })}\n\n`
-    );
+    const payload = {
+      nonce: session.nonce,
+      startTimestamp: session.startTimestamp,
+      answerWindowOpensAt: session.answerWindowOpensAt,
+      deadline: session.deadline,
+      serverTime: Date.now(),
+    };
+    res.write(`event: tick\ndata: ${JSON.stringify({ ...payload, signature: signPayload(payload) })}\n\n`);
   };
 
   sendQuestion();

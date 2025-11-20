@@ -14,25 +14,25 @@ interface QuestionPayload {
     total: number;
     pot: number;
     text: string;
-    options: string[];
-    correctIndex: number;
+    options: { id: string; label: string }[];
+    correctOptionId: string;
     optionHashes: string[];
   };
 }
 
 const sessionStore = new Map<string, QuestionPayload>();
 const answerAuditLog: AnswerRecord[] = [];
+const attemptStore = new Map<string, number>();
 
-const demoQuestion: QuestionPayload["question"] = {
-  id: "demo-q-1",
-  number: 3,
-  total: 15,
-  pot: 150,
-  text: "¿Cuál fue el primer satélite artificial lanzado al espacio?",
-  options: ["Sputnik 1", "Explorer 1", "Vostok 1", "Soyuz MS-02"],
-  correctIndex: 0,
-  optionHashes: [],
-};
+const demoQuestionText = "¿Cuál fue el primer satélite artificial lanzado al espacio?";
+const demoOptions = ["Sputnik 1", "Explorer 1", "Vostok 1", "Soyuz MS-02"];
+const demoQuestionId = "demo-q-1";
+
+const buildOptions = () =>
+  demoOptions.map((label, idx) => ({
+    id: crypto.createHash("sha256").update(`${demoQuestionId}:${idx}:${label}`).digest("hex"),
+    label,
+  }));
 
 export const createQuestionSession = (gameId: string): QuestionPayload => {
   const startTimestamp = Date.now();
@@ -42,18 +42,19 @@ export const createQuestionSession = (gameId: string): QuestionPayload => {
     .createHash("sha256")
     .update(
       JSON.stringify({
-        id: demoQuestion.id,
-        number: demoQuestion.number,
-        text: demoQuestion.text,
-        options: demoQuestion.options,
-        correctIndex: demoQuestion.correctIndex,
+        id: demoQuestionId,
+        number: 3,
+        text: demoQuestionText,
+        options: demoOptions,
+        correctIndex: 0,
       })
     )
     .digest("hex");
-  const optionHashes = demoQuestion.options.map((option, idx) =>
+  const options = buildOptions();
+  const optionHashes = demoOptions.map((option, idx) =>
     crypto
       .createHash("sha256")
-      .update(`${demoQuestion.id}:${idx}:${option}`)
+      .update(`${demoQuestionId}:${idx}:${option}`)
       .digest("hex")
   );
 
@@ -64,10 +65,17 @@ export const createQuestionSession = (gameId: string): QuestionPayload => {
     answerWindowOpensAt,
     deadline,
     questionHash,
-    question: demoQuestion,
+    question: {
+      id: demoQuestionId,
+      number: 3,
+      total: 15,
+      pot: 150,
+      text: demoQuestionText,
+      options,
+      correctOptionId: options[0].id,
+      optionHashes,
+    },
   };
-
-  session.question.optionHashes = optionHashes;
 
   sessionStore.set(session.nonce, session);
   return session;
@@ -89,12 +97,14 @@ export interface AnswerRecord {
   questionHash: string;
   questionNumber: number;
   answerIndex: number;
+  optionId: string;
   correct: boolean;
   answeredAt: number;
   clientAnsweredAt?: number;
   answerTime: number;
   answerHash: string;
   suspicious?: string;
+  wallet?: string;
 }
 
 export const validateAnswerWindow = (nonce: string, answeredAt: number): AnswerValidation => {
@@ -124,6 +134,16 @@ export const validateAnswerWindow = (nonce: string, answeredAt: number): AnswerV
   return { accepted: true };
 };
 
+export const registerAttempt = (key: string, limit = 3) => {
+  const count = (attemptStore.get(key) ?? 0) + 1;
+  attemptStore.set(key, count);
+  return { allowed: count <= limit, count };
+};
+
+export const resetAttempt = (key: string) => {
+  attemptStore.delete(key);
+};
+
 export const recordAnswer = (record: AnswerRecord) => {
   answerAuditLog.push(record);
   if (record.suspicious) {
@@ -132,8 +152,10 @@ export const recordAnswer = (record: AnswerRecord) => {
       gameId: record.gameId,
       questionId: record.questionId,
       answerIndex: record.answerIndex,
+      optionId: record.optionId,
       answerTime: record.answerTime,
       answeredAt: record.answeredAt,
+      wallet: record.wallet,
       reason: record.suspicious,
     });
   }

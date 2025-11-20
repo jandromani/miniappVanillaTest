@@ -2,7 +2,7 @@ import { MiniAppPaymentSuccessPayload } from "@worldcoin/minikit-js";
 import { RequestHandler } from "express";
 import { getPayment, updatePaymentStatus } from "./payment-store";
 import { addTournamentEntry } from "./tournaments";
-import { verifyWorldcoinTransaction } from "./worldcoin";
+import { verifyWorldcoinTransaction } from "./worldcoin-client";
 
 interface IRequestPayload {
   payload: MiniAppPaymentSuccessPayload;

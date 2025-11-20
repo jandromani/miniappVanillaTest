@@ -3,6 +3,56 @@ import { MiniKit } from "https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.1.
 
 MiniKit.install();
 
+const TIME_HMAC_SECRET = "dev-time-secret";
+let hmacKeyPromise;
+const getHmacKey = async () => {
+  if (!hmacKeyPromise) {
+    hmacKeyPromise = crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(TIME_HMAC_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"]
+    );
+  }
+  return hmacKeyPromise;
+};
+
+const hexToArrayBuffer = (hex) => {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes.buffer;
+};
+
+const verifySignature = async (payload, signature) => {
+  if (!signature) return false;
+  try {
+    const key = await getHmacKey();
+    const data = new TextEncoder().encode(JSON.stringify(payload));
+    return crypto.subtle.verify("HMAC", key, hexToArrayBuffer(signature), data);
+  } catch (error) {
+    console.error("Signature verification failed", error);
+    return false;
+  }
+};
+
+const toastRoot = document.getElementById("toast-root");
+const showToast = (message, variant = "info") => {
+  if (!toastRoot) return;
+  const toast = document.createElement("div");
+  const styles = {
+    info: "bg-slate-800 text-slate-100",
+    success: "bg-emerald-600 text-emerald-50",
+    error: "bg-rose-600 text-rose-50",
+  };
+  toast.className = `toast ${styles[variant] ?? styles.info}`;
+  toast.textContent = message;
+  toastRoot.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+};
+
 const sessionStatus = document.getElementById("session-status");
 const lastVerification = document.getElementById("last-verification");
 const connectButton = document.getElementById("connect-worldcoin");
@@ -50,8 +100,15 @@ let hasLockedAnswer = false;
 let serverOffsetMs = 0;
 let questionSource = null;
 let reconnectTimer = null;
+let reconnectAttempts = 0;
+let currentWallet = "anon-player";
 
 const serverNow = () => Date.now() + serverOffsetMs;
+
+const reconcileServerTime = (serverTime) => {
+  if (typeof serverTime !== "number") return;
+  serverOffsetMs = serverTime - Date.now();
+};
 
 const setSSEIndicator = (state, message) => {
   if (!sseStatus) return;
@@ -245,13 +302,14 @@ function animateQuestion(session) {
 
   requestAnimationFrame(typewriter);
 
-  const createOptionButton = (label, index) => {
+  const createOptionButton = (option, index) => {
     const button = document.createElement("button");
     button.className =
       "option-button opacity-0 translate-y-2 transition-all duration-300 bg-slate-800/80 border border-slate-700 hover:border-sky-400 text-left px-4 py-3 rounded-xl font-semibold select-none";
-    button.textContent = label;
+    button.textContent = option.label;
     button.disabled = true;
-    button.addEventListener("click", () => handleAnswer(label, index, question.correctIndex));
+    button.dataset.optionId = option.id;
+    button.addEventListener("click", () => handleAnswer(option, index));
     optionsContainer.appendChild(button);
     return button;
   };
@@ -301,7 +359,7 @@ function animateQuestion(session) {
 
     if (now >= deadline && !hasLockedAnswer) {
       lockAnswers();
-      handleAnswer(null, -1, question.correctIndex, true);
+      handleAnswer(null, -1, null, true);
     }
   };
 
@@ -312,7 +370,7 @@ function animateQuestion(session) {
   }, 250);
 }
 
-function handleAnswer(option, index, correctIndex, auto = false) {
+async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
   if (!activeSession || hasLockedAnswer) return;
   const now = serverNow();
   const start = activeSession.startTimestamp;
@@ -321,59 +379,78 @@ function handleAnswer(option, index, correctIndex, auto = false) {
 
   if (now > deadline) {
     answerStatus.textContent = "Respuesta rechazada: ventana cerrada (0s).";
+    showToast("Ventana cerrada: no se puede responder.", "error");
     return;
   }
   if (now < answerWindowOpensAt && !auto) {
     answerStatus.textContent = "Respuesta bloqueada hasta los 10s restantes.";
+    showToast("Espera a que se abra la ventana de respuesta.", "info");
     return;
   }
 
   hasLockedAnswer = true;
   const buttons = optionsContainer.querySelectorAll("button");
-  buttons.forEach((btn, btnIndex) => {
+  buttons.forEach((btn) => {
     btn.disabled = true;
     btn.classList.add("cursor-not-allowed");
-    if (btnIndex === correctIndex) {
-      btn.classList.add("border-emerald-400", "shadow-lg", "shadow-emerald-500/30");
-    }
-    if (index === btnIndex && index !== correctIndex) {
-      btn.classList.add("border-rose-500", "shadow-lg", "shadow-rose-500/30", "animate-[shake_300ms_ease]");
-    }
   });
 
   const payload = {
     nonce: activeSession.nonce,
     answerIndex: index,
+    optionId: option?.id ?? "no-answer",
     answeredAt: now,
     autoSubmit: auto,
     questionHash: activeSession.questionHash,
     questionNumber: activeSession.question?.number,
+    wallet: currentWallet,
   };
 
-  fetch(`http://localhost:3000/api/game/${activeSession.gameId}/answer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        const message = await response.json().catch(() => ({}));
-        answerStatus.textContent =
-          message?.reason === "answered_too_early_server"
-            ? "Backend: intentaste responder antes de los 10s."
-            : message?.reason === "answered_after_deadline_server"
-            ? "Backend: llegaste después de 0s."
-            : "Respuesta rechazada por el backend.";
-      } else {
-        answerStatus.textContent = auto
-          ? "Envío automático al expirar el tiempo."
-          : "Respuesta enviada y aceptada.";
-      }
-    })
-    .catch((error) => {
-      console.error("Error sending answer", error);
-      answerStatus.textContent = "No se pudo enviar la respuesta al servidor.";
+  try {
+    const response = await fetch(`http://localhost:3000/api/game/${activeSession.gameId}/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
+
+    if (!response.ok) {
+      const message = await response.json().catch(() => ({}));
+      const reason =
+        message?.reason === "answered_too_early_server"
+          ? "Backend: intentaste responder antes de los 10s."
+          : message?.reason === "answered_after_deadline_server"
+          ? "Backend: llegaste después de 0s."
+          : message?.reason === "rate_limited"
+          ? "Backend: demasiados intentos en la misma pregunta."
+          : "Respuesta rechazada por el backend.";
+      answerStatus.textContent = reason;
+      showToast(reason, "error");
+      return;
+    }
+
+    const result = await response.json();
+    const correctOptionId = result.correctOptionId;
+    optionsContainer.querySelectorAll("button").forEach((btn) => {
+      const isCorrect = btn.dataset.optionId === correctOptionId;
+      if (isCorrect) {
+        btn.classList.add("border-emerald-400", "shadow-lg", "shadow-emerald-500/30");
+      }
+      if (btn.dataset.optionId === option?.id && !isCorrect) {
+        btn.classList.add("border-rose-500", "shadow-lg", "shadow-rose-500/30", "animate-[shake_300ms_ease]");
+      }
+    });
+
+    answerStatus.textContent = auto
+      ? "Envío automático al expirar el tiempo."
+      : result.correct
+        ? "Respuesta correcta registrada."
+        : "Respuesta registrada (incorrecta).";
+    showToast(answerStatus.textContent, result.correct ? "success" : "info");
+  } catch (error) {
+    console.error("Error sending answer", error);
+    answerStatus.textContent = "No se pudo enviar la respuesta al servidor.";
+    showToast("No se pudo enviar la respuesta.", "error");
+  }
 }
 
 function setActiveTab(tab) {
@@ -436,6 +513,7 @@ async function handlePay(tournament) {
     });
 
     sessionStatus.textContent = "Pago en curso...";
+    showToast("Pago enviado, verificando en World App...", "info");
     const confirmation = await fetch("http://localhost:3000/confirm-payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -445,14 +523,17 @@ async function handlePay(tournament) {
     if (!confirmation.ok) {
       sessionStatus.textContent = "Pago fallido";
       lastVerification.textContent = "Revisa el estado en World App";
+      showToast("Pago fallido o pendiente, revisa en World App.", "error");
     } else {
       sessionStatus.textContent = "Pago confirmado";
       lastVerification.textContent = "Entrada acreditada";
       fetchTournaments();
+      showToast("Pago confirmado y entrada aplicada.", "success");
     }
   } catch (error) {
     sessionStatus.textContent = "Pago simulado (dev)";
     lastVerification.textContent = "Revisión manual";
+    showToast("Pago simulado en modo dev.", "info");
   }
 }
 
@@ -502,28 +583,41 @@ const streamQuestions = () => {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
+    reconnectAttempts = 0;
   };
 
-  questionSource.onmessage = (event) => {
+  questionSource.onmessage = async (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.serverTime) {
-        serverOffsetMs = data.serverTime - Date.now();
+      const { signature, ...payload } = data;
+      const valid = await verifySignature(payload, signature);
+      if (!valid) {
+        showToast("Firma de tiempo no válida: ignorando evento.", "error");
+        return;
       }
-      animateQuestion(data);
+      if (payload.serverTime) {
+        reconcileServerTime(payload.serverTime);
+      }
+      animateQuestion(payload);
     } catch (error) {
       console.error("Failed to parse question", error);
     }
   };
 
-  questionSource.addEventListener("tick", (event) => {
+  questionSource.addEventListener("tick", async (event) => {
     try {
       const data = JSON.parse(event.data);
-      serverOffsetMs = data.serverTime - Date.now();
-      if (activeSession && data.nonce === activeSession.nonce) {
-        activeSession.deadline = data.deadline;
-        activeSession.startTimestamp = data.startTimestamp;
-        activeSession.answerWindowOpensAt = data.answerWindowOpensAt;
+      const { signature, ...payload } = data;
+      const valid = await verifySignature(payload, signature);
+      if (!valid) {
+        showToast("Tick rechazado por firma inválida.", "error");
+        return;
+      }
+      reconcileServerTime(payload.serverTime);
+      if (activeSession && payload.nonce === activeSession.nonce) {
+        activeSession.deadline = payload.deadline;
+        activeSession.startTimestamp = payload.startTimestamp;
+        activeSession.answerWindowOpensAt = payload.answerWindowOpensAt;
       }
     } catch (error) {
       console.error("Failed to parse tick", error);
@@ -532,10 +626,14 @@ const streamQuestions = () => {
 
   questionSource.onerror = () => {
     setSSEIndicator("reconnecting", "SSE desconectado, reintentando...");
-    answerStatus.textContent = "SSE desconectado, usando sesión demo local";
-    bootstrapDemoSession();
+    answerStatus.textContent = "SSE desconectado, reintentando con backoff";
+    const delay = Math.min(10_000, 1000 * Math.pow(2, reconnectAttempts));
+    reconnectAttempts += 1;
     if (!reconnectTimer) {
-      reconnectTimer = setTimeout(streamQuestions, 5000);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        streamQuestions();
+      }, delay);
     }
   };
 };
