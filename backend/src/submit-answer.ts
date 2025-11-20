@@ -44,11 +44,12 @@ export const submitAnswerHandler: RequestHandler = (req, res) => {
 
   const correct = session.question.correctIndex === answerIndex;
 
-  const answerTime = Math.max(0, answeredAt - session.startTimestamp);
+  const serverAnsweredAt = Date.now();
+  const answerTime = Math.max(0, serverAnsweredAt - session.startTimestamp);
   const suspicious = answerTime < 500 ? "answered_too_fast" : undefined;
   const answerHash = crypto
     .createHash("sha256")
-    .update(`${session.question.id}:${nonce}:${answerIndex}:${answeredAt}`)
+    .update(`${session.question.id}:${nonce}:${answerIndex}:${serverAnsweredAt}`)
     .digest("hex");
 
   const record: AnswerRecord = {
@@ -59,7 +60,8 @@ export const submitAnswerHandler: RequestHandler = (req, res) => {
     questionNumber: session.question.number,
     answerIndex,
     correct,
-    answeredAt,
+    answeredAt: serverAnsweredAt,
+    clientAnsweredAt: answeredAt,
     answerTime,
     answerHash,
     suspicious,

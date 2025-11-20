@@ -1,3 +1,5 @@
+import { loadState, updateState } from "./storage";
+
 export type PaymentStatus = "pending" | "confirmed" | "failed";
 
 export interface PaymentRecord {
@@ -12,7 +14,20 @@ export interface PaymentRecord {
   createdAt: number;
 }
 
-const paymentStore = new Map<string, PaymentRecord>();
+const bootstrap = () => {
+  const state = loadState();
+  const map = new Map<string, PaymentRecord>();
+  state.payments?.forEach((p) => {
+    map.set(p.reference, p as PaymentRecord);
+  });
+  return map;
+};
+
+const persist = (map: Map<string, PaymentRecord>) => {
+  updateState({ payments: Array.from(map.values()) });
+};
+
+const paymentStore = bootstrap();
 
 export const createPaymentReference = (record: Omit<PaymentRecord, "createdAt" | "updatedAt" | "status"> & { status?: PaymentStatus }) => {
   const createdAt = Date.now();
@@ -23,6 +38,7 @@ export const createPaymentReference = (record: Omit<PaymentRecord, "createdAt" |
     ...record,
   };
   paymentStore.set(record.reference, payload);
+  persist(paymentStore);
   return payload;
 };
 
@@ -38,6 +54,7 @@ export const updatePaymentStatus = (reference: string, status: PaymentStatus, tr
     updatedAt: Date.now(),
   };
   paymentStore.set(reference, updated);
+  persist(paymentStore);
   return updated;
 };
 

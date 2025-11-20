@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { loadState, updateState } from "./storage";
 
 export type TournamentStatus = "open" | "active" | "finished";
 
@@ -41,7 +42,7 @@ export interface Tournament {
   merkleRoot?: string;
 }
 
-const tournaments: Tournament[] = [
+const defaultTournaments: Tournament[] = [
   {
     id: "1",
     name: "Grand Slam #53",
@@ -89,6 +90,20 @@ const tournaments: Tournament[] = [
   },
 ];
 
+const bootstrapTournaments = (): Tournament[] => {
+  const state = loadState();
+  if (state.tournaments && state.tournaments.length) {
+    return state.tournaments as Tournament[];
+  }
+  return defaultTournaments;
+};
+
+const persist = (items: Tournament[]) => {
+  updateState({ tournaments: items });
+};
+
+const tournaments: Tournament[] = bootstrapTournaments();
+
 const payoutSplits = [0.5, 0.3, 0.2];
 
 const computeFinancials = (tournament: Tournament) => {
@@ -115,6 +130,7 @@ export const addTournamentEntry = (id: string, entry: Omit<TournamentEntry, "cre
   if (!tournament) return undefined;
   tournament.entries.push({ ...entry, createdAt: Date.now() });
   tournament.players = Math.max(tournament.players, tournament.entries.length);
+  persist(tournaments);
   return getTournament(id);
 };
 
@@ -160,6 +176,7 @@ export const finalizeTournament = (id: string) => {
   tournament.payouts = payouts;
   tournament.merkleRoot = merkleRoot;
   tournament.payoutTxHash = payoutTxHash;
+  persist(tournaments);
 
   return {
     ...tournament,
@@ -178,4 +195,19 @@ export const processDuePayouts = () => {
       if (finalized) processed.push(finalized as Tournament);
     });
   return processed;
+};
+
+export const getUserHistory = (wallet: string) => {
+  const participated = tournaments.filter((t) =>
+    t.entries.some((entry) => entry.userId === wallet)
+  );
+  const wins = participated.filter((t) =>
+    t.payouts.some((p) => p.userId === wallet)
+  );
+
+  return {
+    wallet,
+    played: participated.map((t) => ({ id: t.id, name: t.name, status: t.status })),
+    wins: wins.map((t) => ({ id: t.id, name: t.name, payout: t.payouts.find((p) => p.userId === wallet)?.amount })),
+  };
 };

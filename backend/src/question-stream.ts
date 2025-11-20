@@ -11,13 +11,17 @@ export const questionStreamHandler: RequestHandler = (req, res) => {
   res.flushHeaders?.();
 
   const sendQuestion = () => {
-    res.write(`data: ${JSON.stringify(session)}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({ ...session, serverTime: Date.now() })}\n\n`
+    );
   };
 
   const sendTick = () => {
     res.write(
       `event: tick\ndata: ${JSON.stringify({
         nonce: session.nonce,
+        startTimestamp: session.startTimestamp,
+        answerWindowOpensAt: session.answerWindowOpensAt,
         deadline: session.deadline,
         serverTime: Date.now(),
       })}\n\n`

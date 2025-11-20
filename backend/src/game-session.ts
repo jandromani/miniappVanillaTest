@@ -4,6 +4,7 @@ interface QuestionPayload {
   gameId: string;
   nonce: string;
   startTimestamp: number;
+  answerWindowOpensAt: number;
   deadline: number;
   questionHash: string;
   question: {
@@ -34,6 +35,7 @@ const demoQuestion: QuestionPayload["question"] = {
 
 export const createQuestionSession = (gameId: string): QuestionPayload => {
   const startTimestamp = Date.now();
+  const answerWindowOpensAt = startTimestamp + 4_000;
   const deadline = startTimestamp + 14_000;
   const questionHash = crypto
     .createHash("sha256")
@@ -58,6 +60,7 @@ export const createQuestionSession = (gameId: string): QuestionPayload => {
     gameId,
     nonce: crypto.randomUUID(),
     startTimestamp,
+    answerWindowOpensAt,
     deadline,
     questionHash,
     question: demoQuestion,
@@ -87,6 +90,7 @@ export interface AnswerRecord {
   answerIndex: number;
   correct: boolean;
   answeredAt: number;
+  clientAnsweredAt?: number;
   answerTime: number;
   answerHash: string;
   suspicious?: string;
@@ -97,7 +101,7 @@ export const validateAnswerWindow = (nonce: string, answeredAt: number): AnswerV
   if (!session) return { accepted: false, reason: "session_not_found" };
   const now = Date.now();
 
-  if (now < session.startTimestamp + 4000) {
+  if (now < session.answerWindowOpensAt) {
     return { accepted: false, reason: "answered_too_early_server" };
   }
 
@@ -105,7 +109,7 @@ export const validateAnswerWindow = (nonce: string, answeredAt: number): AnswerV
     return { accepted: false, reason: "answered_after_deadline_server" };
   }
 
-  if (answeredAt < session.startTimestamp + 4000) {
+  if (answeredAt < session.answerWindowOpensAt) {
     return { accepted: false, reason: "answered_too_early" };
   }
 

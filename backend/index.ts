@@ -10,6 +10,7 @@ import {
   getTournament,
   getLeaderboard,
   processDuePayouts,
+  getUserHistory,
 } from "./src/tournaments";
 import cors from "cors";
 
@@ -58,6 +59,11 @@ app.get("/api/tournaments/:id/leaderboard", (req, res) => {
     return;
   }
   res.json({ ok: true, leaderboard });
+});
+
+app.get("/api/user/:wallet/history", (req, res) => {
+  const history = getUserHistory(req.params.wallet);
+  res.json({ ok: true, history });
 });
 
 const port = 3000; // use env var

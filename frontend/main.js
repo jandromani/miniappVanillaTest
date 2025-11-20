@@ -22,6 +22,7 @@ const timerRing = document.getElementById("timer-ring");
 const questionProgress = document.getElementById("question-progress");
 const progressBar = document.getElementById("progress-bar");
 const gamePot = document.getElementById("game-pot");
+const answerStatus = document.getElementById("answer-status");
 
 let tournaments = [];
 let leaderboard = [];
@@ -45,6 +46,9 @@ let revealTimeouts = [];
 let countdownInterval = null;
 let activeSession = null;
 let hasLockedAnswer = false;
+let serverOffsetMs = 0;
+
+const serverNow = () => Date.now() + serverOffsetMs;
 
 const statusMap = {
   open: {
@@ -193,6 +197,7 @@ function resetQuestionUI() {
   timerRing.style.strokeDashoffset = "0";
   progressBar.style.width = "0%";
   questionText.textContent = "";
+  answerStatus.textContent = "";
 }
 
 function animateQuestion(session) {
@@ -202,7 +207,9 @@ function animateQuestion(session) {
   activeSession = session;
 
   const start = session.startTimestamp;
+  const answerWindowOpensAt = session.answerWindowOpensAt ?? start + 4000;
   const deadline = session.deadline;
+  const showPhaseDuration = answerWindowOpensAt - start;
   const duration = deadline - start;
 
   questionProgress.textContent = `Pregunta ${question.number} de ${question.total}`;
@@ -212,12 +219,12 @@ function animateQuestion(session) {
 
   const typewriter = () => {
     if (!activeSession || hasLockedAnswer) return;
-    const now = Date.now();
-    const elapsed = Math.min(Math.max(0, now - start), duration);
-    const progress = duration === 0 ? 1 : elapsed / duration;
+    const now = serverNow();
+    const elapsed = Math.min(Math.max(0, now - start), showPhaseDuration);
+    const progress = showPhaseDuration === 0 ? 1 : elapsed / showPhaseDuration;
     const chars = Math.floor(progress * fullText.length);
     questionText.textContent = fullText.slice(0, chars);
-    if (now < deadline) {
+    if (now < answerWindowOpensAt) {
       requestAnimationFrame(typewriter);
     } else {
       questionText.textContent = fullText;
@@ -237,19 +244,20 @@ function animateQuestion(session) {
     return button;
   };
 
-  const revealStart = start + 4000;
+  const revealStart = start + 1000;
 
   question.options.forEach((option, index) => {
     const revealAt = revealStart + index * 1000;
-    const delay = Math.max(0, revealAt - Date.now());
+    const delay = Math.max(0, revealAt - serverNow());
 
     revealTimeouts.push(
       setTimeout(() => {
-        if (!activeSession || hasLockedAnswer || Date.now() >= deadline) return;
+        if (!activeSession || hasLockedAnswer || serverNow() >= deadline) return;
         const button = createOptionButton(option, index);
         requestAnimationFrame(() => {
           button.classList.remove("opacity-0", "translate-y-2");
-          button.disabled = Date.now() < revealStart || Date.now() >= deadline;
+          const now = serverNow();
+          button.disabled = now < answerWindowOpensAt || now >= deadline;
         });
       }, delay)
     );
@@ -264,14 +272,14 @@ function animateQuestion(session) {
   };
 
   const tick = () => {
-    const now = Date.now();
+    const now = serverNow();
     const timeLeft = Math.max(0, Math.ceil((deadline - now) / 1000));
     timerLabel.textContent = timeLeft.toString().padStart(2, "0");
     const elapsed = Math.min(duration, Math.max(0, now - start));
     timerRing.style.strokeDashoffset = `${(elapsed / duration) * 100}`;
     progressBar.style.width = `${(elapsed / duration) * 100}%`;
 
-    if (now >= start + 4000 && now < deadline) {
+    if (now >= answerWindowOpensAt && now < deadline) {
       optionsContainer.querySelectorAll("button").forEach((btn) => {
         btn.disabled = false;
         btn.classList.remove("opacity-40", "cursor-not-allowed");
@@ -287,18 +295,25 @@ function animateQuestion(session) {
   tick();
   countdownInterval = setInterval(() => {
     tick();
-    if (Date.now() >= deadline) clearInterval(countdownInterval);
+    if (serverNow() >= deadline) clearInterval(countdownInterval);
   }, 250);
 }
 
 function handleAnswer(option, index, correctIndex, auto = false) {
   if (!activeSession || hasLockedAnswer) return;
-  const now = Date.now();
+  const now = serverNow();
   const start = activeSession.startTimestamp;
   const deadline = activeSession.deadline;
+  const answerWindowOpensAt = activeSession.answerWindowOpensAt ?? start + 4000;
 
-  if (now > deadline) return;
-  if (now < start + 4000 && !auto) return;
+  if (now > deadline) {
+    answerStatus.textContent = "Respuesta rechazada: ventana cerrada (0s).";
+    return;
+  }
+  if (now < answerWindowOpensAt && !auto) {
+    answerStatus.textContent = "Respuesta bloqueada hasta los 10s restantes.";
+    return;
+  }
 
   hasLockedAnswer = true;
   const buttons = optionsContainer.querySelectorAll("button");
@@ -326,7 +341,26 @@ function handleAnswer(option, index, correctIndex, auto = false) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  }).catch((error) => console.error("Error sending answer", error));
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const message = await response.json().catch(() => ({}));
+        answerStatus.textContent =
+          message?.reason === "answered_too_early_server"
+            ? "Backend: intentaste responder antes de los 10s."
+            : message?.reason === "answered_after_deadline_server"
+            ? "Backend: llegaste después de 0s."
+            : "Respuesta rechazada por el backend.";
+      } else {
+        answerStatus.textContent = auto
+          ? "Envío automático al expirar el tiempo."
+          : "Respuesta enviada y aceptada.";
+      }
+    })
+    .catch((error) => {
+      console.error("Error sending answer", error);
+      answerStatus.textContent = "No se pudo enviar la respuesta al servidor.";
+    });
 }
 
 function setActiveTab(tab) {
@@ -388,15 +422,21 @@ async function handlePay(tournament) {
       description: `Entrada a ${tournament.name}`,
     });
 
-    await fetch("http://localhost:3000/confirm-payment", {
+    sessionStatus.textContent = "Pago en curso...";
+    const confirmation = await fetch("http://localhost:3000/confirm-payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ payload: { ...paymentPayload, reference } }),
     });
 
-    sessionStatus.textContent = "Pago iniciado";
-    lastVerification.textContent = "Validación pendiente backend";
-    fetchTournaments();
+    if (!confirmation.ok) {
+      sessionStatus.textContent = "Pago fallido";
+      lastVerification.textContent = "Revisa el estado en World App";
+    } else {
+      sessionStatus.textContent = "Pago confirmado";
+      lastVerification.textContent = "Entrada acreditada";
+      fetchTournaments();
+    }
   } catch (error) {
     sessionStatus.textContent = "Pago simulado (dev)";
     lastVerification.textContent = "Revisión manual";
@@ -429,6 +469,7 @@ const bootstrapDemoSession = () => {
     gameId: "demo",
     nonce: crypto.randomUUID(),
     startTimestamp: start,
+    answerWindowOpensAt: start + 4000,
     deadline: start + 14000,
     question: demoQuestion,
   });
@@ -440,6 +481,9 @@ const streamQuestions = () => {
   source.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+      if (data.serverTime) {
+        serverOffsetMs = data.serverTime - Date.now();
+      }
       animateQuestion(data);
     } catch (error) {
       console.error("Failed to parse question", error);
@@ -449,9 +493,11 @@ const streamQuestions = () => {
   source.addEventListener("tick", (event) => {
     try {
       const data = JSON.parse(event.data);
+      serverOffsetMs = data.serverTime - Date.now();
       if (activeSession && data.nonce === activeSession.nonce) {
-        // keep timers aligned with server timestamp if drift is detected
         activeSession.deadline = data.deadline;
+        activeSession.startTimestamp = data.startTimestamp;
+        activeSession.answerWindowOpensAt = data.answerWindowOpensAt;
       }
     } catch (error) {
       console.error("Failed to parse tick", error);
@@ -460,6 +506,7 @@ const streamQuestions = () => {
 
   source.onerror = () => {
     console.warn("Falling back to demo session");
+    answerStatus.textContent = "SSE desconectado, usando sesión demo local";
     bootstrapDemoSession();
   };
 };
