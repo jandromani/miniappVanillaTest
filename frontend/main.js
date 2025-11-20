@@ -56,6 +56,7 @@ const showToast = (message, variant = "info") => {
 const sessionStatus = document.getElementById("session-status");
 const lastVerification = document.getElementById("last-verification");
 const connectButton = document.getElementById("connect-worldcoin");
+const walletInput = document.getElementById("wallet-input");
 const featuredName = document.getElementById("featured-name");
 const featuredStatus = document.getElementById("featured-status");
 const featuredPrize = document.getElementById("featured-prize");
@@ -102,6 +103,11 @@ let questionSource = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let currentWallet = "anon-player";
+let sessionToken = null;
+let sessionWallet = "anon-player";
+let lastPaymentSignature = null;
+let lastPayloadBase = null;
+let lastPaymentReference = null;
 
 const serverNow = () => Date.now() + serverOffsetMs;
 
@@ -186,6 +192,11 @@ function renderTournaments(filter = "open") {
             <p class="font-semibold">${tournament.players}</p>
           </div>
         </div>
+        ${
+          tournament.payoutTxHash
+            ? `<p class="text-xs text-slate-400">Payout: <a class="text-amber-300 underline" target="_blank" rel="noreferrer" href="${tournament.explorerBaseUrl ? `${tournament.explorerBaseUrl}/${tournament.payoutTxHash}` : "#"}">${tournament.payoutTxHash}</a>${tournament.explorerBaseUrl ? "" : " (simulado)"}</p>`
+            : ""
+        }
         <button class="join-button w-full bg-indigo-500 hover:bg-indigo-400 transition-colors px-4 py-2 rounded-xl font-semibold shadow-lg shadow-indigo-500/30" data-id="${tournament.id}">
           ${tournament.status === "open" ? "Unirse al torneo" : "Ver detalle"}
         </button>
@@ -388,6 +399,12 @@ async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
     return;
   }
 
+  if (!sessionToken) {
+    showToast("Autentica con World ID antes de responder.", "error");
+    answerStatus.textContent = "Necesitas token de sesión activo.";
+    return;
+  }
+
   hasLockedAnswer = true;
   const buttons = optionsContainer.querySelectorAll("button");
   buttons.forEach((btn) => {
@@ -403,13 +420,12 @@ async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
     autoSubmit: auto,
     questionHash: activeSession.questionHash,
     questionNumber: activeSession.question?.number,
-    wallet: currentWallet,
   };
 
   try {
     const response = await fetch(`http://localhost:3000/api/game/${activeSession.gameId}/answer`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
       body: JSON.stringify(payload),
     });
 
@@ -471,17 +487,39 @@ async function handleVerify() {
   }
 
   try {
+    const wallet = walletInput?.value?.trim() || currentWallet;
     const { finalPayload } = await MiniKit.commandsAsync.verify({
       action: "join-tournament",
       signal: "demo-signal",
       verification_level: "orb",
     });
 
+    const verifyResponse = await fetch("http://localhost:3000/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: finalPayload, action: "join-tournament", signal: "demo-signal", wallet }),
+    });
+
+    if (!verifyResponse.ok) {
+      sessionStatus.textContent = "Verificación rechazada";
+      showToast("El backend rechazó la verificación de World ID", "error");
+      return;
+    }
+
+    const verifyData = await verifyResponse.json();
+    sessionToken = verifyData.token;
+    sessionWallet = verifyData.wallet ?? wallet;
+    currentWallet = sessionWallet;
+    if (walletInput && !walletInput.value) {
+      walletInput.value = sessionWallet;
+    }
     lastVerification.textContent = "World ID verificado";
-    sessionStatus.textContent = finalPayload.status === "success" ? "Sesión validada" : "Intento de verificación";
+    sessionStatus.textContent = "Sesión validada";
+    showToast("Sesión autenticada y firmada.", "success");
   } catch (error) {
     lastVerification.textContent = "Modo mock (dev)";
     sessionStatus.textContent = "Sesión simulada";
+    showToast("Sesión simulada en modo dev.", "info");
   }
 }
 
@@ -492,21 +530,33 @@ async function handlePay(tournament) {
     return;
   }
 
+  if (!sessionToken) {
+    showToast("Autentica con World ID antes de pagar.", "error");
+    return;
+  }
+
   try {
     const referenceResponse = await fetch("http://localhost:3000/initiate-payment", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tournamentId: tournament.id, token: "WLD", amount: tournament.entryFee }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ tournamentId: tournament.id }),
     });
-    const { id: reference } = await referenceResponse.json();
+    if (!referenceResponse.ok) {
+      const err = await referenceResponse.json().catch(() => ({}));
+      showToast(`No se pudo iniciar el pago (${err.reason ?? "desconocido"}).`, "error");
+      return;
+    }
+    const { id: reference, signature, amount, token, to } = await referenceResponse.json();
+    lastPaymentSignature = signature;
+    lastPaymentReference = reference;
 
     const paymentPayload = await MiniKit.commandsAsync.pay({
       reference,
-      to: "0x2cFc85d8E48F8EAB294be644d9E25C3030863003",
+      to,
       tokens: [
         {
-          symbol: "WLD",
-          token_amount: tournament.entryFee.toString(),
+          symbol: token,
+          token_amount: amount.toString(),
         },
       ],
       description: `Entrada a ${tournament.name}`,
@@ -516,14 +566,18 @@ async function handlePay(tournament) {
     showToast("Pago enviado, verificando en World App...", "info");
     const confirmation = await fetch("http://localhost:3000/confirm-payment", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payload: { ...paymentPayload, reference } }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ payload: { ...paymentPayload, reference }, signature }),
     });
 
     if (!confirmation.ok) {
+      const err = await confirmation.json().catch(() => ({}));
       sessionStatus.textContent = "Pago fallido";
       lastVerification.textContent = "Revisa el estado en World App";
-      showToast("Pago fallido o pendiente, revisa en World App.", "error");
+      showToast(
+        `Pago fallido o pendiente (${err.reason ?? "consulta en World App"}).`,
+        "error"
+      );
     } else {
       sessionStatus.textContent = "Pago confirmado";
       lastVerification.textContent = "Entrada acreditada";

@@ -13,6 +13,8 @@ import {
   getUserHistory,
 } from "./src/tournaments";
 import { getSuspiciousAnswers } from "./src/game-session";
+import { requireAuth } from "./src/auth";
+import { getFinanceConsistency } from "./src/finance";
 import cors from "cors";
 
 const app = express();
@@ -38,10 +40,10 @@ app.get("/ping", (_, res) => {
 
 // protected routes
 app.post("/verify", verifyHandler);
-app.post("/initiate-payment", initiatePaymentHandler);
-app.post("/confirm-payment", confirmPaymentHandler);
+app.post("/initiate-payment", requireAuth, initiatePaymentHandler);
+app.post("/confirm-payment", requireAuth, confirmPaymentHandler);
 app.get("/api/game/:id/question", questionStreamHandler);
-app.post("/api/game/:id/answer", submitAnswerHandler);
+app.post("/api/game/:id/answer", requireAuth, submitAnswerHandler);
 app.get("/api/tournaments", (_req, res) => {
   res.json({ tournaments: listTournaments() });
 });
@@ -71,14 +73,18 @@ app.get("/api/suspicious", (_req, res) => {
   res.json({ ok: true, suspicious: getSuspiciousAnswers() });
 });
 
+app.get("/api/admin/finance/consistency", (_req, res) => {
+  res.json(getFinanceConsistency());
+});
+
 const port = 3000; // use env var
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
 
 // basic cron simulation for payouts
-setInterval(() => {
-  const processed = processDuePayouts();
+setInterval(async () => {
+  const processed = await processDuePayouts();
   if (processed.length) {
     console.log(
       `Processed payouts for tournaments: ${processed.map((t) => t.id).join(", ")}`

@@ -5,9 +5,13 @@ export type PaymentStatus = "pending" | "confirmed" | "failed";
 export interface PaymentRecord {
   reference: string;
   userId?: string;
+  worldId?: string;
+  wallet?: string;
   tournamentId?: string;
   token: "WLD" | "USDC";
   amount: number;
+  to: string;
+  signature?: string;
   status: PaymentStatus;
   transactionId?: string;
   updatedAt: number;

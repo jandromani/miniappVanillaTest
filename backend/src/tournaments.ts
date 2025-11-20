@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { loadState, updateState } from "./storage";
 import { syncPrizePoolWithOnChain } from "./worldchain-prizepool";
 import { buildMerkleRootForTournament, preparePayoutPayloads, publishPayoutsOnChain } from "./worldchain-merkle";
+import { publishPayoutsOnChainClient } from "./worldchain-client";
 
 export type TournamentStatus = "open" | "active" | "finished";
 
@@ -15,6 +16,7 @@ export interface LeaderboardEntry {
 export interface TournamentEntry {
   reference: string;
   userId?: string;
+  wallet?: string;
   amount: number;
   token: "WLD" | "USDC";
   transactionId?: string;
@@ -154,6 +156,7 @@ export const listTournaments = () =>
       ...tournament,
       prizePool,
       rakeAmount,
+      explorerBaseUrl: process.env.EXPLORER_BASE_URL ?? null,
     };
   });
 
@@ -200,7 +203,7 @@ export const getLeaderboard = (id: string) => {
   }));
 };
 
-export const finalizeTournament = (id: string) => {
+export const finalizeTournament = async (id: string) => {
   const tournament = tournaments.find((t) => t.id === id);
   if (!tournament || tournament.status === "finished") return undefined;
   const { prizePool, rakeAmount, totalPaid } = computeFinancials(tournament);
@@ -214,7 +217,12 @@ export const finalizeTournament = (id: string) => {
   }));
 
   const merkleRoot = buildMerkleRootForTournament(leaderboard);
-  const payoutTxHash = publishPayoutsOnChain(id, merkleRoot, payoutsPayload).txHash;
+  const onChainResult = await publishPayoutsOnChainClient({
+    tournamentId: id,
+    merkleRoot,
+    payouts: payoutsPayload,
+  });
+  const payoutTxHash = publishPayoutsOnChain(id, merkleRoot, payoutsPayload, onChainResult.txHash, onChainResult.mock).txHash;
   syncPrizePoolWithOnChain(tournament, prizePool, rakeAmount, totalPaid);
 
   tournament.status = "finished";
@@ -230,15 +238,13 @@ export const finalizeTournament = (id: string) => {
   };
 };
 
-export const processDuePayouts = () => {
+export const processDuePayouts = async () => {
   const now = Date.now();
   const processed: Tournament[] = [];
-  tournaments
-    .filter((t) => t.status !== "finished" && t.endsAt <= now)
-    .forEach((tournament) => {
-      const finalized = finalizeTournament(tournament.id);
-      if (finalized) processed.push(finalized as Tournament);
-    });
+  for (const tournament of tournaments.filter((t) => t.status !== "finished" && t.endsAt <= now)) {
+    const finalized = await finalizeTournament(tournament.id);
+    if (finalized) processed.push(finalized as Tournament);
+  }
   return processed;
 };
 

@@ -36,7 +36,8 @@ export const publishPayoutsOnChain = (
   tournamentId: string,
   merkleRoot: string,
   payouts: any[],
-  txHash?: string
+  txHash?: string,
+  mock = false
 ) => {
   const records = loadMerkleRecords();
   const record: MerkleRecord = {

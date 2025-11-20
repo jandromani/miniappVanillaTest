@@ -11,10 +11,11 @@ import {
 } from "./game-session";
 import { appendSuspicious } from "./audit-store";
 import { recordTournamentAnswer } from "./tournaments";
+import { AuthedRequest } from "./auth";
 
 export const submitAnswerHandler: RequestHandler = (req, res) => {
   const { id } = req.params;
-  const { nonce, answerIndex, answeredAt, autoSubmit, questionHash, questionNumber, optionId, wallet } = req.body as {
+  const { nonce, answerIndex, answeredAt, autoSubmit, questionHash, questionNumber, optionId } = req.body as {
     nonce: string;
     answerIndex: number;
     answeredAt: number;
@@ -22,8 +23,9 @@ export const submitAnswerHandler: RequestHandler = (req, res) => {
     questionHash?: string;
     questionNumber?: number;
     optionId?: string;
-    wallet?: string;
   };
+
+  const wallet = (req as AuthedRequest).user?.wallet ?? "anon-player";
 
   if (!nonce || typeof answerIndex !== "number" || typeof answeredAt !== "number" || !optionId) {
     res.status(400).json({ ok: false, reason: "invalid_payload" });

@@ -9,6 +9,7 @@ type PersistedState = {
   suspiciousAnswers?: any[];
   prizePoolSnapshots?: any[];
   merkleRecords?: any[];
+  worldcoinTxLogs?: any[];
 };
 
 const ensureDir = () => {
