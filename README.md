@@ -25,3 +25,35 @@ To stop nginx run `sudo nginx -s stop`
 
 `ngrok http 8080`
 The port doesn't matter, make sure it's the `listen` one from nginx config
+
+## Desarrollo local
+
+1) Backend
+
+- Instala dependencias: `cd backend && pnpm install`
+- Lanza en modo desarrollo: `pnpm dev` (escucha en `http://localhost:8080`)
+- Para producción local: `pnpm build && pnpm start`
+
+2) Ngrok (opcional para mini app real)
+
+- Expone el backend: `ngrok http 8080`
+- Usa el subdominio generado, por ejemplo `https://<subdominio>.ngrok-free.dev`
+
+3) Frontend
+
+- Instala dependencias: `cd frontend && pnpm install`
+- Configura la API: crea `.env` en `frontend/` con `VITE_API_BASE_URL=http://localhost:8080` (o tu URL de ngrok)
+- Lanza el frontend: `pnpm dev` (abre `http://localhost:5173`)
+
+4) Variables clave para MiniKit
+
+- Define `VITE_MINIKIT_APP_ID`, `window.MINIKIT_APP_ID` y `window.API_BASE` (en `index.html` o `.env`) según tu app de Worldcoin.
+- En modo ngrok, `VITE_API_BASE_URL` debe apuntar al dominio `https://<subdominio>.ngrok-free.dev`.
+
+Con esta configuración, el frontend hará las llamadas a:
+
+- `GET {API_BASE}/api/tournaments`
+- `GET {API_BASE}/api/tournaments/{id}/leaderboard`
+- `GET {API_BASE}/api/game/demo/question`
+
+sin errores CORS ni 404 siempre que el backend esté corriendo en el puerto indicado.

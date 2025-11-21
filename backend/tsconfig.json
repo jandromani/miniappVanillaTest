@@ -1,22 +1,16 @@
 {
-  "include": ["src//*.ts", "index.ts"],
-  "exclude": ["node_modules"],
   "compilerOptions": {
-    "lib": ["ES2023"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "baseUrl": ".",
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-
-    /* Linting */
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": ".",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "strict": true,
-    "noImplicitAny": false
-  }
+    "noEmit": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "index.ts"],
+  "exclude": ["node_modules"]
 }
