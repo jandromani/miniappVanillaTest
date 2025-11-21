@@ -23,7 +23,18 @@ const app = express();
 // https://expressjs.com/en/guide/behind-proxies.html
 app.set("trust proxy", true);
 // allow cors
-app.use(cors());
+const allowedOrigins = (process.env.FRONTEND_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  })
+);
 // json middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -77,7 +88,7 @@ app.get("/api/admin/finance/consistency", (_req, res) => {
   res.json(getFinanceConsistency());
 });
 
-const port = 3000; // use env var
+const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });

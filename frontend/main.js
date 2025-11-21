@@ -778,8 +778,8 @@ const t = (key, vars = {}) => {
 
 const API_BASE =
   window.API_BASE ||
-  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE : "") ||
-  "http://localhost:3000";
+  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : "") ||
+  "http://localhost:8080";
 
 const MINIKIT_APP_ID =
   window.MINIKIT_APP_ID ||
@@ -1138,6 +1138,11 @@ async function fetchTournaments() {
 }
 
 async function fetchLeaderboard(tournamentId) {
+  if (!tournamentId) {
+    leaderboard = [];
+    renderLeaderboard();
+    return;
+  }
   try {
     const response = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/leaderboard`);
     const data = await response.json();
