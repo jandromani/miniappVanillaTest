@@ -776,10 +776,15 @@ const t = (key, vars = {}) => {
   return template.replace(/\{(\w+)\}/g, (_, name) => `${vars[name] ?? ""}`);
 };
 
-const API_BASE =
-  window.API_BASE ||
-  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : "") ||
-  "http://localhost:8080";
+const API_BASE = (() => {
+  const envBase =
+    (typeof window !== "undefined" ? window.API_BASE : undefined) ??
+    (typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined) ??
+    (typeof window !== "undefined" ? window.location.origin : undefined) ??
+    "http://localhost:8080";
+
+  return envBase.replace(/\/$/, "");
+})();
 
 const ENVIRONMENT =
   window.ENVIRONMENT ||

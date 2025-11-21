@@ -52,8 +52,8 @@ The port doesn't matter, make sure it's the `listen` one from nginx config
 
 Con esta configuración, el frontend hará las llamadas a:
 
-- `GET {API_BASE}/api/tournaments`
-- `GET {API_BASE}/api/tournaments/{id}/leaderboard`
-- `GET {API_BASE}/api/game/demo/question`
+- `GET {API_BASE}/api/tournaments` → devuelve `{ tournaments: Tournament[] }` con `id`, `name`, `status`, `entryFee`, `basePrizePool`, `rakePercent`, `endsAt`, `players`, `prizePool`, `rakeAmount` y `explorerBaseUrl`.
+- `GET {API_BASE}/api/tournaments/{id}/leaderboard` → devuelve `{ ok: true, leaderboard: LeaderboardEntry[] }` con `position`, `wallet`, `userId`, `correct`, `timeMs` y `reward`.
+- `GET {API_BASE}/api/game/demo/question` → endpoint SSE (`text/event-stream`) que envía `data: { ...session, signature }` y eventos `tick` con la misma firma de tiempo.
 
 sin errores CORS ni 404 siempre que el backend esté corriendo en el puerto indicado.

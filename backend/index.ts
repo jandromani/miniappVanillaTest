@@ -64,23 +64,23 @@ app.post("/confirm-payment", requireAuth, confirmPaymentHandler);
 app.get("/api/game/:id/question", questionStreamHandler);
 app.post("/api/game/:id/answer", requireAuth, submitAnswerHandler);
 app.get("/api/tournaments", (_req, res) => {
-  res.json({ tournaments: listTournaments() });
+  res.type("application/json").json({ tournaments: listTournaments() });
 });
 app.get("/api/tournaments/:id", (req, res) => {
   const tournament = getTournament(req.params.id);
   if (!tournament) {
-    res.status(404).json({ ok: false, reason: "not_found" });
+    res.status(404).type("application/json").json({ ok: false, reason: "not_found" });
     return;
   }
-  res.json({ ok: true, tournament });
+  res.type("application/json").json({ ok: true, tournament });
 });
 app.get("/api/tournaments/:id/leaderboard", (req, res) => {
   const leaderboard = getLeaderboard(req.params.id);
   if (!leaderboard) {
-    res.status(404).json({ ok: false, reason: "not_found" });
+    res.status(404).type("application/json").json({ ok: false, reason: "not_found" });
     return;
   }
-  res.json({ ok: true, leaderboard });
+  res.type("application/json").json({ ok: true, leaderboard });
 });
 
 app.get("/api/user/:wallet/history", (req, res) => {
