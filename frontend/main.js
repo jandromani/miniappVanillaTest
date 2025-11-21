@@ -1122,6 +1122,10 @@ function renderLeaderboard() {
 async function fetchTournaments() {
   try {
     const response = await fetch(`${API_BASE}/api/tournaments`);
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/json")) {
+      throw new Error(`Bad tournaments response: status ${response.status}`);
+    }
     const data = await response.json();
     tournaments = data.tournaments ?? [];
     renderFeatured();
@@ -1145,11 +1149,16 @@ async function fetchLeaderboard(tournamentId) {
   }
   try {
     const response = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/leaderboard`);
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/json")) {
+      throw new Error(`Bad leaderboard response: status ${response.status}`);
+    }
     const data = await response.json();
     leaderboard = data.leaderboard ?? [];
     renderLeaderboard();
   } catch (error) {
     console.error("Failed to fetch leaderboard", error);
+    showToast(t("answerSendFailed"), "error");
   }
 }
 
@@ -1515,6 +1524,12 @@ const streamQuestions = () => {
   }
 
   setSSEIndicator("reconnecting", t("sseConnecting"));
+  if (!API_BASE) {
+    showToast(t("tickRejected"), "error");
+    setSSEIndicator("reconnecting", t("sseReconnecting"));
+    return;
+  }
+
   questionSource = new EventSource(`${API_BASE}/api/game/demo/question`);
 
   questionSource.onopen = () => {
