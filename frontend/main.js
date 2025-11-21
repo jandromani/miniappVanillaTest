@@ -781,6 +781,13 @@ const API_BASE =
   (typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : "") ||
   "http://localhost:8080";
 
+const ENVIRONMENT =
+  window.ENVIRONMENT ||
+  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_ENVIRONMENT : "") ||
+  "local";
+
+const isLocalEnvironment = ENVIRONMENT === "local";
+
 const MINIKIT_APP_ID =
   window.MINIKIT_APP_ID ||
   (typeof import.meta !== "undefined" ? import.meta.env?.VITE_MINIKIT_APP_ID : "") ||
@@ -791,6 +798,50 @@ try {
 } catch (error) {
   console.warn("MiniKit install fallback", error);
 }
+
+const isMiniKitAvailable = () => {
+  try {
+    return typeof MiniKit?.isInstalled === "function" ? MiniKit.isInstalled() : false;
+  } catch (error) {
+    console.warn("Error checking MiniKit installation", error);
+    return false;
+  }
+};
+
+let hasLoggedMiniKitWarning = false;
+const ensureMiniKitAvailable = () => {
+  const installed = isMiniKitAvailable();
+  if (!installed && !hasLoggedMiniKitWarning) {
+    console.warn("MiniKit not installed – running outside World App. Skipping MiniKit-only flows.");
+    hasLoggedMiniKitWarning = true;
+  }
+  return installed;
+};
+
+const connectMetaMask = async () => {
+  if (typeof window === "undefined") {
+    console.warn("MetaMask connection attempted in non-browser environment.");
+    return null;
+  }
+
+  const provider = window.ethereum;
+  if (!provider) {
+    console.warn("MetaMask extension not found – skipping MetaMask flow in this environment.");
+    return null;
+  }
+
+  try {
+    const accounts = await provider.request({ method: "eth_requestAccounts" });
+    if (Array.isArray(accounts) && accounts.length > 0) {
+      return accounts[0];
+    }
+    console.warn("MetaMask returned no accounts.");
+  } catch (error) {
+    console.error("Failed to connect to MetaMask", error);
+  }
+
+  return null;
+};
 
 const TIME_HMAC_SECRET = "dev-time-secret";
 let hmacKeyPromise;
@@ -1374,7 +1425,25 @@ function setActiveTab(tab) {
 }
 
 async function handleVerify() {
-  if (!MiniKit.isInstalled()) {
+  const typedWallet = walletInput?.value?.trim();
+  const fallbackWallet = typedWallet || currentWallet;
+
+  if (!ensureMiniKitAvailable()) {
+    if (isLocalEnvironment) {
+      const metaMaskWallet = await connectMetaMask();
+      const simulatedWallet = metaMaskWallet || fallbackWallet || "dev-wallet";
+      sessionToken = "dev-session-token";
+      sessionWallet = simulatedWallet;
+      currentWallet = simulatedWallet;
+      if (walletInput && !walletInput.value) {
+        walletInput.value = simulatedWallet;
+      }
+      lastVerification.textContent = t("verifyFallback");
+      sessionStatus.textContent = t("verifyFallback");
+      showToast(t("verifyFallback"), "info");
+      return;
+    }
+
     sessionStatus.textContent = t("minikitMissing");
     sessionStatus.classList.replace("text-emerald-400", "text-rose-400");
     showToast(t("minikitMissing"), "error");
@@ -1382,7 +1451,7 @@ async function handleVerify() {
   }
 
   try {
-    const wallet = walletInput?.value?.trim() || currentWallet;
+    const wallet = fallbackWallet;
     const { finalPayload } = await MiniKit.commandsAsync.verify({
       action: "join-tournament",
       signal: "demo-signal",
@@ -1421,7 +1490,14 @@ async function handleVerify() {
 }
 
 async function handlePay(tournament) {
-  if (!MiniKit.isInstalled()) {
+  if (!ensureMiniKitAvailable()) {
+    if (isLocalEnvironment) {
+      sessionStatus.textContent = t("paySimulated");
+      lastVerification.textContent = t("paySimulated");
+      showToast(t("paySimulated"), "info");
+      return;
+    }
+
     sessionStatus.textContent = t("minikitMissing");
     sessionStatus.classList.replace("text-emerald-400", "text-rose-400");
     showToast(t("minikitMissing"), "error");
