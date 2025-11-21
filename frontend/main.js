@@ -6,6 +6,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Conectar con Worldcoin",
+    languageToggle: "Cambiar idioma",
     heroOverline: "Trivia estilo ¿Quién quiere ser millonario?",
     heroTitle: "Torneos sincronizados, pagos en WLD y verificación World ID",
     heroSubtitle:
@@ -81,6 +82,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Connect with Worldcoin",
+    languageToggle: "Change language",
     heroOverline: "Millionaire-style trivia",
     heroTitle: "Synced tournaments, WLD payments, and World ID verification",
     heroSubtitle:
@@ -156,6 +158,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Kumonekta sa Worldcoin",
+    languageToggle: "Baguhin ang wika",
     heroOverline: "Trivia na estilo millonario",
     heroTitle: "Naka-sync na torneo, bayad sa WLD, at World ID",
     heroSubtitle:
@@ -231,6 +234,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Hubungkan Worldcoin",
+    languageToggle: "Ganti bahasa",
     heroOverline: "Trivia ala millionaire",
     heroTitle: "Turnamen tersinkron, pembayaran WLD, verifikasi World ID",
     heroSubtitle:
@@ -306,6 +310,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "เชื่อมต่อกับ Worldcoin",
+    languageToggle: "เปลี่ยนภาษา",
     heroOverline: "เกมถามตอบสไตล์เศรษฐี",
     heroTitle: "ทัวร์นาเมนต์ซิงก์ จ่าย WLD และยืนยัน World ID",
     heroSubtitle:
@@ -381,6 +386,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Mit Worldcoin verbinden",
+    languageToggle: "Sprache wechseln",
     heroOverline: "Quiz im Millionär-Stil",
     heroTitle: "Synchronisierte Turniere, WLD-Zahlungen und World-ID-Check",
     heroSubtitle:
@@ -456,6 +462,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Sambung dengan Worldcoin",
+    languageToggle: "Tukar bahasa",
     heroOverline: "Trivia gaya jutawan",
     heroTitle: "Tornamen terselaras, bayaran WLD, pengesahan World ID",
     heroSubtitle:
@@ -531,6 +538,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Worldcoin 연결",
+    languageToggle: "언어 변경",
     heroOverline: "백만장자 스타일 퀴즈",
     heroTitle: "동기화 토너먼트, WLD 결제, World ID",
     heroSubtitle:
@@ -606,6 +614,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "连接 Worldcoin",
+    languageToggle: "切换语言",
     heroOverline: "百万富翁风格问答",
     heroTitle: "同步锦标赛、WLD 支付与 World ID 验证",
     heroSubtitle:
@@ -681,6 +690,7 @@ const translations = {
     brandOverline: "World Chain",
     brandTitle: "50x15 Trivia Arena",
     connectButton: "Worldcoin に接続",
+    languageToggle: "言語を変更",
     heroOverline: "ミリオネア風トリビア",
     heroTitle: "同期トーナメント、WLD決済、World ID検証",
     heroSubtitle:
@@ -754,6 +764,34 @@ const translations = {
   },
 };
 
+const languageSelect = document.getElementById("language-select");
+const languageToggle = document.getElementById("language-toggle");
+const languageOrder = Object.keys(translations);
+let currentLang = localStorage.getItem("lang") || "es";
+
+const t = (key, vars = {}) => {
+  const dict = translations[currentLang] || translations.es;
+  const fallback = translations.es;
+  const template = dict[key] ?? fallback[key] ?? key;
+  return template.replace(/\{(\w+)\}/g, (_, name) => `${vars[name] ?? ""}`);
+};
+
+const API_BASE =
+  window.API_BASE ||
+  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE : "") ||
+  "http://localhost:3000";
+
+const MINIKIT_APP_ID =
+  window.MINIKIT_APP_ID ||
+  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_MINIKIT_APP_ID : "") ||
+  "app_c8716c2f7b2c71968e629c5711ec5c9d";
+
+try {
+  MiniKit.install({ app_id: MINIKIT_APP_ID });
+} catch (error) {
+  console.warn("MiniKit install fallback", error);
+}
+
 const TIME_HMAC_SECRET = "dev-time-secret";
 let hmacKeyPromise;
 const getHmacKey = async () => {
@@ -804,24 +842,51 @@ const showToast = (message, variant = "info") => {
   setTimeout(() => toast.remove(), 3500);
 };
 
+const brandOverline = document.querySelector('[data-i18n="brandOverline"]');
+const brandTitle = document.querySelector('[data-i18n="brandTitle"]');
 const sessionStatus = document.getElementById("session-status");
 const lastVerification = document.getElementById("last-verification");
 const connectButton = document.getElementById("connect-worldcoin");
 const walletInput = document.getElementById("wallet-input");
+const heroOverline = document.getElementById("hero-overline");
+const heroTitle = document.getElementById("hero-title");
+const heroSubtitle = document.getElementById("hero-subtitle");
+const badgeCron = document.getElementById("badge-cron");
+const badgePrize = document.getElementById("badge-prize");
+const badgeAnti = document.getElementById("badge-anti");
+const walletLabel = document.getElementById("wallet-label");
+const sessionLabel = document.getElementById("session-label");
+const verificationLabel = document.getElementById("verification-label");
+const featuredOverline = document.getElementById("featured-overline");
 const featuredName = document.getElementById("featured-name");
 const featuredStatus = document.getElementById("featured-status");
 const featuredPrize = document.getElementById("featured-prize");
 const featuredEntry = document.getElementById("featured-entry");
 const featuredTime = document.getElementById("featured-time");
 const featuredPlayers = document.getElementById("featured-players");
+const featuredPrizeLabel = document.getElementById("featured-prize-label");
+const featuredEntryLabel = document.getElementById("featured-entry-label");
+const featuredTimeLabel = document.getElementById("featured-time-label");
+const featuredPlayersLabel = document.getElementById("featured-players-label");
 const joinFeatured = document.getElementById("join-featured");
+const tournamentsOverline = document.getElementById("tournaments-overline");
+const tournamentsTitle = document.getElementById("tournaments-title");
+const tabOpen = document.getElementById("tab-open");
+const tabActive = document.getElementById("tab-active");
+const tabFinished = document.getElementById("tab-finished");
+const leaderboardOverline = document.getElementById("leaderboard-overline");
+const leaderboardTitle = document.getElementById("leaderboard-title");
 const leaderboardList = document.getElementById("leaderboard");
 const tournamentList = document.getElementById("tournament-list");
+const questionOverline = document.getElementById("question-overline");
+const questionTitle = document.getElementById("question-title");
+const potLabel = document.getElementById("pot-label");
 const questionText = document.getElementById("question-text");
 const optionsContainer = document.getElementById("options");
 const timerLabel = document.getElementById("timer-label");
 const timerRing = document.getElementById("timer-ring");
 const questionProgress = document.getElementById("question-progress");
+const questionTotal = document.getElementById("question-total");
 const progressBar = document.getElementById("progress-bar");
 const gamePot = document.getElementById("game-pot");
 const answerStatus = document.getElementById("answer-status");
@@ -876,19 +941,79 @@ const setSSEIndicator = (state, message) => {
   sseStatus.classList.add(color);
 };
 
-const statusMap = {
-  open: {
-    label: "Abierto",
-    classes: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
-  },
-  active: {
-    label: "En curso",
-    classes: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
-  },
-  finished: {
-    label: "Finalizado",
-    classes: "bg-rose-500/20 text-rose-200 border border-rose-500/30",
-  },
+const statusClasses = {
+  open: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+  active: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
+  finished: "bg-rose-500/20 text-rose-200 border border-rose-500/30",
+};
+
+const statusLabel = (status) => {
+  if (status === "open") return t("statusOpen");
+  if (status === "active") return t("statusActive");
+  return t("statusFinished");
+};
+
+const applyStaticTranslations = () => {
+  if (brandOverline) brandOverline.textContent = t("brandOverline");
+  if (brandTitle) brandTitle.textContent = t("brandTitle");
+  connectButton.textContent = t("connectButton");
+  if (languageToggle) {
+    languageToggle.textContent = t("languageToggle");
+    languageToggle.setAttribute("aria-label", t("languageToggle"));
+  }
+  heroOverline.textContent = t("heroOverline");
+  heroTitle.textContent = t("heroTitle");
+  heroSubtitle.textContent = t("heroSubtitle");
+  badgeCron.textContent = t("badgeCron");
+  badgePrize.textContent = t("badgePrize");
+  badgeAnti.textContent = t("badgeAnti");
+  walletLabel.textContent = t("walletLabel");
+  sessionLabel.textContent = t("sessionLabel");
+  verificationLabel.textContent = t("verificationLabel");
+  featuredOverline.textContent = t("featuredOverline");
+  featuredPrizeLabel.textContent = t("prizePool");
+  featuredEntryLabel.textContent = t("entryFee");
+  featuredTimeLabel.textContent = t("timeLeft");
+  featuredPlayersLabel.textContent = t("players");
+  joinFeatured.textContent = t("joinFeatured");
+  tournamentsOverline.textContent = t("tournamentsOverline");
+  tournamentsTitle.textContent = t("tournamentsTitle");
+  tabOpen.textContent = t("tabOpen");
+  tabActive.textContent = t("tabActive");
+  tabFinished.textContent = t("tabFinished");
+  leaderboardOverline.textContent = t("leaderboardOverline");
+  leaderboardTitle.textContent = t("leaderboardTitle");
+  questionOverline.textContent = t("questionOverline");
+  questionTitle.textContent = t("questionTitle");
+  potLabel.textContent = t("potLabel");
+  questionTotal.textContent = t("questionTotal", { seconds: 14 });
+  document.documentElement.lang = currentLang;
+};
+
+const populateLanguageSelect = () => {
+  if (!languageSelect) return;
+  languageSelect.innerHTML = "";
+  Object.keys(translations).forEach((lang) => {
+    const option = document.createElement("option");
+    option.value = lang;
+    option.textContent = lang.toUpperCase();
+    if (lang === currentLang) option.selected = true;
+    languageSelect.appendChild(option);
+  });
+};
+
+const setLanguage = (lang) => {
+  if (!translations[lang]) return;
+  currentLang = lang;
+  localStorage.setItem("lang", currentLang);
+  populateLanguageSelect();
+  if (languageToggle) {
+    languageToggle.textContent = `🌐 ${t("languageToggle")}`;
+    languageToggle.setAttribute("aria-label", t("languageToggle"));
+  }
+  applyStaticTranslations();
+  renderTournaments(document.querySelector(".tab-button.bg-slate-800")?.dataset.tab ?? "open");
+  fetchLeaderboard();
 };
 
 const positionBadge = (pos) => {
@@ -899,11 +1024,11 @@ const positionBadge = (pos) => {
 };
 
 const formatRemaining = (tournament) => {
-  if (tournament.status === "finished") return "Finalizado";
+  if (tournament.status === "finished") return t("statusFinished");
   const delta = Math.max(0, tournament.endsAt - Date.now());
   const hours = Math.floor(delta / (1000 * 60 * 60));
   const minutes = Math.floor((delta % (1000 * 60 * 60)) / (1000 * 60));
-  if (hours <= 0 && minutes <= 0) return "En vivo";
+  if (hours <= 0 && minutes <= 0) return t("timeLive");
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
 };
 
@@ -912,44 +1037,48 @@ function renderTournaments(filter = "open") {
   tournaments
     .filter((t) => t.status === filter)
     .forEach((tournament) => {
-      const statusInfo = statusMap[tournament.status];
+      const statusInfo = { label: statusLabel(tournament.status), classes: statusClasses[tournament.status] };
       const card = document.createElement("article");
       card.className =
         "glow-card border border-slate-800 rounded-2xl p-4 flex flex-col gap-3";
       card.innerHTML = `
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-xs text-slate-400 uppercase tracking-[0.2em]">${tournament.status === "finished" ? "Histórico" : "Torneo"}</p>
+            <p class="text-xs text-slate-400 uppercase tracking-[0.2em]">${
+              tournament.status === "finished" ? t("cardHistoric") : t("cardTag")
+            }</p>
             <h4 class="text-lg font-semibold">${tournament.name}</h4>
           </div>
           <span class="${statusInfo.classes} px-3 py-1 rounded-full text-xs font-semibold">${statusInfo.label}</span>
         </div>
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p class="text-slate-400">Prize Pool</p>
+            <p class="text-slate-400">${t("prizePool")}</p>
             <p class="text-xl font-bold text-amber-300">${tournament.prizePool.toFixed(2)} WLD</p>
             <p class="text-xs text-slate-400">Rake ${(tournament.rakePercent * 100).toFixed(0)}% → ${(tournament.rakeAmount ?? 0).toFixed(2)} WLD</p>
           </div>
           <div>
-            <p class="text-slate-400">Entry Fee</p>
+            <p class="text-slate-400">${t("entryFee")}</p>
             <p class="text-base font-semibold">${tournament.entryFee.toFixed(2)} WLD</p>
           </div>
           <div>
-            <p class="text-slate-400">Tiempo</p>
+            <p class="text-slate-400">${t("timeLeft")}</p>
             <p class="font-semibold">${formatRemaining(tournament)}</p>
           </div>
           <div>
-            <p class="text-slate-400">Jugadores</p>
+            <p class="text-slate-400">${t("players")}</p>
             <p class="font-semibold">${tournament.players}</p>
           </div>
         </div>
         ${
           tournament.payoutTxHash
-            ? `<p class="text-xs text-slate-400">Payout: <a class="text-amber-300 underline" target="_blank" rel="noreferrer" href="${tournament.explorerBaseUrl ? `${tournament.explorerBaseUrl}/${tournament.payoutTxHash}` : "#"}">${tournament.payoutTxHash}</a>${tournament.explorerBaseUrl ? "" : " (simulado)"}</p>`
+            ? `<p class="text-xs text-slate-400">${t("payoutLabel")} <a class="text-amber-300 underline" target="_blank" rel="noreferrer" href="${tournament.explorerBaseUrl ? `${tournament.explorerBaseUrl}/${tournament.payoutTxHash}` : "#"}">${tournament.payoutTxHash}</a>${
+                tournament.explorerBaseUrl ? "" : ` ${t("payoutSimulated")}`
+              }</p>`
             : ""
         }
         <button class="join-button w-full bg-indigo-500 hover:bg-indigo-400 transition-colors px-4 py-2 rounded-xl font-semibold shadow-lg shadow-indigo-500/30" data-id="${tournament.id}">
-          ${tournament.status === "open" ? "Unirse al torneo" : "Ver detalle"}
+          ${tournament.status === "open" ? t("joinTournament") : t("viewTournament")}
         </button>
       `;
       tournamentList.appendChild(card);
@@ -964,8 +1093,8 @@ function renderFeatured() {
   featuredEntry.textContent = `${openTournament.entryFee.toFixed(2)} WLD`;
   featuredTime.textContent = formatRemaining(openTournament);
   featuredPlayers.textContent = `${openTournament.players} jugadores`;
-  featuredStatus.textContent = statusMap[openTournament.status].label;
-  featuredStatus.className = `${statusMap[openTournament.status].classes} px-3 py-1 rounded-full text-xs font-semibold`;
+  featuredStatus.textContent = statusLabel(openTournament.status);
+  featuredStatus.className = `${statusClasses[openTournament.status]} px-3 py-1 rounded-full text-xs font-semibold`;
 }
 
 function renderLeaderboard() {
@@ -978,11 +1107,11 @@ function renderLeaderboard() {
         <span class="h-9 w-9 rounded-xl flex items-center justify-center font-bold ${positionBadge(row.position)}">${row.position}</span>
         <div>
           <p class="font-semibold">${row.wallet ?? row.userId}</p>
-          <p class="text-xs text-slate-400">${(row.timeMs / 1000).toFixed(2)}s</p>
+          <p class="text-xs text-slate-400">${t("leaderboardTime", { seconds: (row.timeMs / 1000).toFixed(2) })}</p>
         </div>
       </div>
       <div class="text-right">
-        <p class="text-sm text-slate-300">Aciertos ${row.correct}</p>
+        <p class="text-sm text-slate-300">${t("correctLabel", { value: row.correct })}</p>
         <p class="text-amber-300 font-semibold">${(row.reward ?? 0).toFixed(2)} WLD</p>
       </div>
     `;
@@ -992,7 +1121,7 @@ function renderLeaderboard() {
 
 async function fetchTournaments() {
   try {
-    const response = await fetch("http://localhost:3000/api/tournaments");
+    const response = await fetch(`${API_BASE}/api/tournaments`);
     const data = await response.json();
     tournaments = data.tournaments ?? [];
     renderFeatured();
@@ -1010,7 +1139,7 @@ async function fetchTournaments() {
 
 async function fetchLeaderboard(tournamentId) {
   try {
-    const response = await fetch(`http://localhost:3000/api/tournaments/${tournamentId}/leaderboard`);
+    const response = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/leaderboard`);
     const data = await response.json();
     leaderboard = data.leaderboard ?? [];
     renderLeaderboard();
@@ -1043,7 +1172,7 @@ function animateQuestion(session) {
   const showPhaseDuration = answerWindowOpensAt - start;
   const duration = deadline - start;
 
-  questionProgress.textContent = `Pregunta ${question.number} de ${question.total}`;
+  questionProgress.textContent = t("questionProgress", { number: question.number, total: question.total });
   gamePot.textContent = `${question.pot} WLD`;
 
   const fullText = question.text;
@@ -1140,19 +1269,19 @@ async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
   const answerWindowOpensAt = activeSession.answerWindowOpensAt ?? start + 4000;
 
   if (now > deadline) {
-    answerStatus.textContent = "Respuesta rechazada: ventana cerrada (0s).";
-    showToast("Ventana cerrada: no se puede responder.", "error");
+    answerStatus.textContent = t("answerWindowClosed");
+    showToast(t("answerWindowClosed"), "error");
     return;
   }
   if (now < answerWindowOpensAt && !auto) {
-    answerStatus.textContent = "Respuesta bloqueada hasta los 10s restantes.";
-    showToast("Espera a que se abra la ventana de respuesta.", "info");
+    answerStatus.textContent = t("answerWindowEarly");
+    showToast(t("answerWindowEarly"), "info");
     return;
   }
 
   if (!sessionToken) {
-    showToast("Autentica con World ID antes de responder.", "error");
-    answerStatus.textContent = "Necesitas token de sesión activo.";
+    showToast(t("answerNeedAuth"), "error");
+    answerStatus.textContent = t("needSession");
     return;
   }
 
@@ -1174,7 +1303,7 @@ async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
   };
 
   try {
-    const response = await fetch(`http://localhost:3000/api/game/${activeSession.gameId}/answer`, {
+    const response = await fetch(`${API_BASE}/api/game/${activeSession.gameId}/answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
       body: JSON.stringify(payload),
@@ -1184,12 +1313,12 @@ async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
       const message = await response.json().catch(() => ({}));
       const reason =
         message?.reason === "answered_too_early_server"
-          ? "Backend: intentaste responder antes de los 10s."
+          ? t("backendEarly")
           : message?.reason === "answered_after_deadline_server"
-          ? "Backend: llegaste después de 0s."
+          ? t("backendLate")
           : message?.reason === "rate_limited"
-          ? "Backend: demasiados intentos en la misma pregunta."
-          : "Respuesta rechazada por el backend.";
+          ? t("backendRate")
+          : t("backendRejected");
       answerStatus.textContent = reason;
       showToast(reason, "error");
       return;
@@ -1208,15 +1337,15 @@ async function handleAnswer(option, index, _unusedCorrectIndex, auto = false) {
     });
 
     answerStatus.textContent = auto
-      ? "Envío automático al expirar el tiempo."
+      ? t("autoSubmit")
       : result.correct
-        ? "Respuesta correcta registrada."
-        : "Respuesta registrada (incorrecta).";
+        ? t("correctAnswer")
+        : t("wrongAnswer");
     showToast(answerStatus.textContent, result.correct ? "success" : "info");
   } catch (error) {
     console.error("Error sending answer", error);
-    answerStatus.textContent = "No se pudo enviar la respuesta al servidor.";
-    showToast("No se pudo enviar la respuesta.", "error");
+    answerStatus.textContent = t("answerSendFailed");
+    showToast(t("answerSendFailed"), "error");
   }
 }
 
@@ -1232,8 +1361,9 @@ function setActiveTab(tab) {
 
 async function handleVerify() {
   if (!MiniKit.isInstalled()) {
-    sessionStatus.textContent = "MiniKit no instalado";
+    sessionStatus.textContent = t("minikitMissing");
     sessionStatus.classList.replace("text-emerald-400", "text-rose-400");
+    showToast(t("minikitMissing"), "error");
     return;
   }
 
@@ -1245,15 +1375,15 @@ async function handleVerify() {
       verification_level: "orb",
     });
 
-    const verifyResponse = await fetch("http://localhost:3000/verify", {
+    const verifyResponse = await fetch(`${API_BASE}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ payload: finalPayload, action: "join-tournament", signal: "demo-signal", wallet }),
     });
 
     if (!verifyResponse.ok) {
-      sessionStatus.textContent = "Verificación rechazada";
-      showToast("El backend rechazó la verificación de World ID", "error");
+      sessionStatus.textContent = t("verifyRejected");
+      showToast(t("verifyRejected"), "error");
       return;
     }
 
@@ -1264,39 +1394,40 @@ async function handleVerify() {
     if (walletInput && !walletInput.value) {
       walletInput.value = sessionWallet;
     }
-    lastVerification.textContent = "World ID verificado";
-    sessionStatus.textContent = "Sesión validada";
-    showToast("Sesión autenticada y firmada.", "success");
+    lastVerification.textContent = t("verifySuccess");
+    sessionStatus.textContent = t("verifySuccess");
+    showToast(t("verifySuccess"), "success");
   } catch (error) {
     console.error("World ID verify failed", error);
     sessionToken = null;
-    sessionStatus.textContent = "Verificación fallida";
-    lastVerification.textContent = "Sin verificación";
-    showToast("No se pudo verificar World ID. Intenta de nuevo.", "error");
+    sessionStatus.textContent = t("verifyFail");
+    lastVerification.textContent = t("verifyFail");
+    showToast(t("verifyFail"), "error");
   }
 }
 
 async function handlePay(tournament) {
   if (!MiniKit.isInstalled()) {
-    sessionStatus.textContent = "MiniKit no instalado";
+    sessionStatus.textContent = t("minikitMissing");
     sessionStatus.classList.replace("text-emerald-400", "text-rose-400");
+    showToast(t("minikitMissing"), "error");
     return;
   }
 
   if (!sessionToken) {
-    showToast("Autentica con World ID antes de pagar.", "error");
+    showToast(t("payNeedAuth"), "error");
     return;
   }
 
   try {
-    const referenceResponse = await fetch("http://localhost:3000/initiate-payment", {
+    const referenceResponse = await fetch(`${API_BASE}/initiate-payment`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
       body: JSON.stringify({ tournamentId: tournament.id }),
     });
     if (!referenceResponse.ok) {
       const err = await referenceResponse.json().catch(() => ({}));
-      showToast(`No se pudo iniciar el pago (${err.reason ?? "desconocido"}).`, "error");
+      showToast(t("payStartFail", { reason: err.reason ?? "unknown" }), "error");
       return;
     }
     const { id: reference, signature, amount, token, to } = await referenceResponse.json();
@@ -1315,9 +1446,9 @@ async function handlePay(tournament) {
       description: `Entrada a ${tournament.name}`,
     });
 
-    sessionStatus.textContent = "Pago en curso...";
-    showToast("Pago enviado, verificando en World App...", "info");
-    const confirmation = await fetch("http://localhost:3000/confirm-payment", {
+    sessionStatus.textContent = t("payInProgress");
+    showToast(t("payInProgress"), "info");
+    const confirmation = await fetch(`${API_BASE}/confirm-payment`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
       body: JSON.stringify({ payload: { ...paymentPayload, reference }, signature }),
@@ -1325,22 +1456,19 @@ async function handlePay(tournament) {
 
     if (!confirmation.ok) {
       const err = await confirmation.json().catch(() => ({}));
-      sessionStatus.textContent = "Pago fallido";
-      lastVerification.textContent = "Revisa el estado en World App";
-      showToast(
-        `Pago fallido o pendiente (${err.reason ?? "consulta en World App"}).`,
-        "error"
-      );
+      sessionStatus.textContent = t("payFail", { reason: err.reason ?? "World App" });
+      lastVerification.textContent = t("payFail", { reason: err.reason ?? "World App" });
+      showToast(t("payFail", { reason: err.reason ?? "World App" }), "error");
     } else {
-      sessionStatus.textContent = "Pago confirmado";
-      lastVerification.textContent = "Entrada acreditada";
+      sessionStatus.textContent = t("payConfirmed");
+      lastVerification.textContent = t("payConfirmed");
       fetchTournaments();
-      showToast("Pago confirmado y entrada aplicada.", "success");
+      showToast(t("payConfirmed"), "success");
     }
   } catch (error) {
-    sessionStatus.textContent = "Pago simulado (dev)";
-    lastVerification.textContent = "Revisión manual";
-    showToast("Pago simulado en modo dev.", "info");
+    sessionStatus.textContent = t("paySimulated");
+    lastVerification.textContent = t("paySimulated");
+    showToast(t("paySimulated"), "info");
   }
 }
 
@@ -1381,11 +1509,11 @@ const streamQuestions = () => {
     questionSource.close();
   }
 
-  setSSEIndicator("reconnecting", "Conectando SSE...");
-  questionSource = new EventSource("http://localhost:3000/api/game/demo/question");
+  setSSEIndicator("reconnecting", t("sseConnecting"));
+  questionSource = new EventSource(`${API_BASE}/api/game/demo/question`);
 
   questionSource.onopen = () => {
-    setSSEIndicator("connected", "SSE en vivo");
+    setSSEIndicator("connected", t("sseConnected"));
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -1399,7 +1527,7 @@ const streamQuestions = () => {
       const { signature, ...payload } = data;
       const valid = await verifySignature(payload, signature);
       if (!valid) {
-        showToast("Firma de tiempo no válida: ignorando evento.", "error");
+        showToast(t("tickInvalid"), "error");
         return;
       }
       if (payload.serverTime) {
@@ -1417,7 +1545,7 @@ const streamQuestions = () => {
       const { signature, ...payload } = data;
       const valid = await verifySignature(payload, signature);
       if (!valid) {
-        showToast("Tick rechazado por firma inválida.", "error");
+        showToast(t("tickRejected"), "error");
         return;
       }
       reconcileServerTime(payload.serverTime);
@@ -1432,8 +1560,8 @@ const streamQuestions = () => {
   });
 
   questionSource.onerror = () => {
-    setSSEIndicator("reconnecting", "SSE desconectado, reintentando...");
-    answerStatus.textContent = "SSE desconectado, reintentando con backoff";
+    setSSEIndicator("reconnecting", t("sseReconnecting"));
+    answerStatus.textContent = t("sseReconnecting");
     const delay = Math.min(10_000, 1000 * Math.pow(2, reconnectAttempts));
     reconnectAttempts += 1;
     if (!reconnectTimer) {
@@ -1444,6 +1572,19 @@ const streamQuestions = () => {
     }
   };
 };
+
+setLanguage(currentLang);
+setSSEIndicator("reconnecting", t("sseConnecting"));
+
+languageSelect?.addEventListener("change", (event) => {
+  setLanguage(event.target.value);
+});
+
+languageToggle?.addEventListener("click", () => {
+  const idx = languageOrder.indexOf(currentLang);
+  const next = languageOrder[(idx + 1) % languageOrder.length];
+  setLanguage(next);
+});
 
 streamQuestions();
 setInterval(fetchTournaments, 5000);
