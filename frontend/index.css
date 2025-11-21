@@ -1,3 +1,88 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --background: 220 25% 8%;
+  --foreground: 210 40% 98%;
+  --primary: 217 91% 60%;
+  --primary-glow: 217 91% 70%;
+  --accent: 45 93% 47%;
+  --success: 142 71% 45%;
+  --error: 0 84% 60%;
+  --muted: 217 20% 20%;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.question-text,
+.option-button {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.option-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.option-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.25), transparent 60%);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.option-button:hover::after {
+  opacity: 1;
+}
+
+.toast {
+  @apply px-3 py-2 rounded-xl shadow-lg shadow-slate-900/50 text-sm;
+  animation: fadeIn 150ms ease, fadeOut 250ms ease 3.2s forwards;
+}
+
+#toast-root {
+  @apply fixed top-4 right-4 flex flex-col gap-2 z-50 pointer-events-none;
+}
+
+.hero-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .hero-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    align-items: stretch;
+  }
+}
+
+.featured-card {
+  height: 100%;
+}
+
+#language-select {
+  min-width: 120px;
+}
+
+.glow-card {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.85));
+  box-shadow: 0 10px 40px rgba(59, 130, 246, 0.15);
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
